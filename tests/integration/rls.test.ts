@@ -10,6 +10,13 @@ const migration = readFileSync(
   path.resolve(testDirectory, '../../supabase/migrations/0001_foundation.sql'),
   'utf8',
 );
+const scopedReferenceMigration = readFileSync(
+  path.resolve(
+    testDirectory,
+    '../../supabase/migrations/0002_validate_scoped_reference_owners.sql',
+  ),
+  'utf8',
+);
 
 function policySql(name: string, table: string): string {
   const start = migration.indexOf(`create policy "${name}" on public.${table}`);
@@ -33,6 +40,25 @@ const liveRlsEnvironment = {
 
 const hasLiveRlsEnvironment = Object.values(liveRlsEnvironment).every(Boolean);
 const describeLiveRls = hasLiveRlsEnvironment ? describe : describe.skip;
+
+const liveReferenceTriggerEnvironment = {
+  url: process.env.SUPABASE_RLS_TEST_URL,
+  anonKey: process.env.SUPABASE_RLS_TEST_ANON_KEY,
+  ownerToken: process.env.SUPABASE_RLS_TEST_OWNER_TOKEN,
+  memberId: process.env.SUPABASE_RLS_TEST_MEMBER_ID,
+  memberTermId: process.env.SUPABASE_RLS_TEST_MEMBER_TERM_ID,
+  memberOtherTermId: process.env.SUPABASE_RLS_TEST_MEMBER_OTHER_TERM_ID,
+  memberSubjectId: process.env.SUPABASE_RLS_TEST_MEMBER_SUBJECT_ID,
+  otherMemberTermId: process.env.SUPABASE_RLS_TEST_OTHER_MEMBER_TERM_ID,
+  otherMemberSubjectId: process.env.SUPABASE_RLS_TEST_OTHER_MEMBER_SUBJECT_ID,
+};
+
+const hasLiveReferenceTriggerEnvironment = Object.values(
+  liveReferenceTriggerEnvironment,
+).every(Boolean);
+const describeLiveReferenceTriggers = hasLiveReferenceTriggerEnvironment
+  ? describe
+  : describe.skip;
 
 describe('row-level security migration contract', () => {
   it('enables RLS and scopes every workspace table to its owner with an explicit owner override', () => {
@@ -61,10 +87,12 @@ describe('row-level security migration contract', () => {
     }
   });
 
-  it('rejects cross-profile term and subject references before RLS can be bypassed', () => {
-    const validationFunction = migration.slice(
-      migration.indexOf('create or replace function public.validate_scoped_reference_owners()'),
-      migration.indexOf('create or replace function public.audit_owner_task_change()'),
+  it('rolls out cross-profile term and subject checks in an additive migration', () => {
+    const validationFunction = scopedReferenceMigration.slice(
+      scopedReferenceMigration.indexOf(
+        'create or replace function public.validate_scoped_reference_owners()',
+      ),
+      scopedReferenceMigration.indexOf('drop trigger if exists subjects_validate_term_owner'),
     );
 
     expect(validationFunction).toContain('security definer');
@@ -84,9 +112,16 @@ describe('row-level security migration contract', () => {
       "message = 'Subject reference must belong to the selected term'",
     );
 
-    expect(migration).toContain('create trigger subjects_validate_term_owner');
-    expect(migration).toContain('create trigger tasks_validate_reference_owners');
-    expect(migration).toContain('create trigger curriculum_items_validate_reference_owners');
+    for (const [table, trigger] of [
+      ['subjects', 'subjects_validate_term_owner'],
+      ['tasks', 'tasks_validate_reference_owners'],
+      ['curriculum_items', 'curriculum_items_validate_reference_owners'],
+    ]) {
+      expect(scopedReferenceMigration).toContain(
+        `drop trigger if exists ${trigger} on public.${table};`,
+      );
+      expect(scopedReferenceMigration).toContain(`create trigger ${trigger}`);
+    }
   });
 });
 
@@ -136,5 +171,115 @@ describeLiveRls('deployed task row-level security', () => {
       .single();
     expect(ownerTask.error).toBeNull();
     expect(ownerTask.data?.id).toBe(otherMemberTaskId);
+  });
+});
+
+describeLiveReferenceTriggers('deployed scoped-reference triggers', () => {
+  it('rejects cross-owner and mismatched references even for owner-admin writes', async () => {
+    const {
+      url,
+      anonKey,
+      ownerToken,
+      memberId,
+      memberTermId,
+      memberOtherTermId,
+      memberSubjectId,
+      otherMemberTermId,
+      otherMemberSubjectId,
+    } = liveReferenceTriggerEnvironment as Record<string, string>;
+
+    const owner = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${ownerToken}` } },
+    });
+    const nonce = crypto.randomUUID();
+
+    async function expectRejectedWrite(
+      write: PromiseLike<{ error: { code?: string; message: string } | null }>,
+      code: string,
+      message: string,
+    ) {
+      const result = await write;
+      expect(result.error?.code).toBe(code);
+      expect(result.error?.message).toContain(message);
+    }
+
+    await expectRejectedWrite(
+      owner.from('subjects').insert({
+        user_id: memberId,
+        term_id: otherMemberTermId,
+        code: `X-${nonce}`,
+        name: 'Cross-owner subject',
+      }),
+      '23503',
+      'Term reference must belong to the same profile',
+    );
+
+    await expectRejectedWrite(
+      owner.from('tasks').insert({
+        user_id: memberId,
+        term_id: otherMemberTermId,
+        subject_id: memberSubjectId,
+        title: `Cross-owner task ${nonce}`,
+        kind: 'school',
+      }),
+      '23503',
+      'Term reference must belong to the same profile',
+    );
+    await expectRejectedWrite(
+      owner.from('tasks').insert({
+        user_id: memberId,
+        term_id: memberTermId,
+        subject_id: otherMemberSubjectId,
+        title: `Cross-owner task subject ${nonce}`,
+        kind: 'school',
+      }),
+      '23503',
+      'Subject reference must belong to the same profile',
+    );
+    await expectRejectedWrite(
+      owner.from('tasks').insert({
+        user_id: memberId,
+        term_id: memberOtherTermId,
+        subject_id: memberSubjectId,
+        title: `Mismatched task subject ${nonce}`,
+        kind: 'school',
+      }),
+      '23514',
+      'Subject reference must belong to the selected term',
+    );
+
+    await expectRejectedWrite(
+      owner.from('curriculum_items').insert({
+        user_id: memberId,
+        term_id: otherMemberTermId,
+        subject_id: memberSubjectId,
+        course_code: `X-${nonce}`,
+        units: 3,
+      }),
+      '23503',
+      'Term reference must belong to the same profile',
+    );
+    await expectRejectedWrite(
+      owner.from('curriculum_items').insert({
+        user_id: memberId,
+        term_id: memberTermId,
+        subject_id: otherMemberSubjectId,
+        course_code: `Y-${nonce}`,
+        units: 3,
+      }),
+      '23503',
+      'Subject reference must belong to the same profile',
+    );
+    await expectRejectedWrite(
+      owner.from('curriculum_items').insert({
+        user_id: memberId,
+        term_id: memberOtherTermId,
+        subject_id: memberSubjectId,
+        course_code: `Z-${nonce}`,
+        units: 3,
+      }),
+      '23514',
+      'Subject reference must belong to the selected term',
+    );
   });
 });
