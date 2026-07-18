@@ -28,6 +28,9 @@ export interface CurriculumItem {
   userId: string;
   termId: string;
   subjectId: string | null;
+  academicYear: number;
+  term: AcademicTermName;
+  status: string;
   courseCode: string;
   courseTitle: string | null;
   units: number;

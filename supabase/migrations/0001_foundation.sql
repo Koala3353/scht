@@ -104,6 +104,9 @@ create table public.curriculum_items (
   user_id uuid not null references public.profiles (id) on delete cascade,
   term_id uuid not null references public.academic_terms (id) on delete cascade,
   subject_id uuid references public.subjects (id) on delete set null,
+  academic_year integer not null check (academic_year between 2000 and 2200),
+  term public.academic_term_name not null,
+  status text not null check (char_length(btrim(status)) between 1 and 32),
   course_code text not null check (char_length(btrim(course_code)) between 1 and 32),
   course_title text,
   units numeric(5, 2) not null check (units >= 0),
@@ -117,6 +120,9 @@ create table public.curriculum_items (
 
 create index curriculum_items_user_term_idx
   on public.curriculum_items (user_id, term_id);
+
+create unique index curriculum_items_import_identity_key
+  on public.curriculum_items (user_id, academic_year, term, course_code);
 
 create table public.admin_audit_logs (
   id bigint generated always as identity primary key,
