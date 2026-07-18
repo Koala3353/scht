@@ -340,6 +340,47 @@ with check (public.is_owner_admin());
 create policy "users view own invite" on public.invites
 for select using (lower(coalesce(auth.jwt() ->> 'email', '')) = normalized_email);
 
+-- Invite rows stay private; these narrowly-scoped functions expose only eligibility
+-- and accept an invite for the authenticated account with the matching email.
+create or replace function public.has_available_invite(candidate_email text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.invites
+    where normalized_email = lower(btrim(candidate_email))
+      and accepted_at is null
+      and (expires_at is null or expires_at > timezone('utc', now()))
+  );
+$$;
+
+create or replace function public.accept_invite_for_current_user()
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  current_email text;
+begin
+  select lower(email) into current_email from auth.users where id = auth.uid();
+  if current_email is null then return false; end if;
+
+  update public.invites
+  set accepted_by = auth.uid(), accepted_at = timezone('utc', now())
+  where normalized_email = current_email
+    and accepted_at is null
+    and (expires_at is null or expires_at > timezone('utc', now()));
+  return found;
+end;
+$$;
+
+grant execute on function public.has_available_invite(text) to anon, authenticated;
+grant execute on function public.accept_invite_for_current_user() to authenticated;
+
 create policy "users manage own academic terms" on public.academic_terms
 for all using (auth.uid() = user_id or public.is_owner_admin())
 with check (auth.uid() = user_id or public.is_owner_admin());

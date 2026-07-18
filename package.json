@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run --config vitest.paths.config.ts",
+    "test": "vitest run --config vitest.paths.config.ts --environment jsdom",
     "test:e2e": "playwright test"
   },
   "dependencies": {
