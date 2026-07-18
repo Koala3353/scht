@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/layout/app-shell';
 import { CurrentTermControl } from '@/components/layout/current-term-control';
 import { requireUser } from '@/lib/auth/guards';
 import { createClient } from '@/lib/supabase/server';
@@ -21,11 +22,6 @@ export default async function AuthenticatedLayout({ children }: Readonly<{ child
     label: `${term.academic_year}–${term.academic_year + 1} · ${termNames[term.name as AcademicTermName]}`,
   }));
 
-  return <main className="min-h-screen p-4 sm:p-6">
-    <header className="mx-auto mb-8 flex max-w-5xl items-end justify-between gap-4">
-      <p className="text-2xl font-bold text-teal">Scht</p>
-      {profile?.current_term_id && options.length > 0 && <CurrentTermControl currentTermId={profile.current_term_id} terms={options} />}
-    </header>
-    {children}
-  </main>;
+  const termControl = profile?.current_term_id && options.length > 0 ? <CurrentTermControl currentTermId={profile.current_term_id} terms={options} /> : <span />;
+  return <AppShell header={termControl}>{children}</AppShell>;
 }
