@@ -1,3 +1,4 @@
+import { MobileInstallPrompt } from '@/components/pwa/mobile-install-prompt';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
@@ -10,5 +11,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: '#075e60' };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body>{children}<MobileInstallPrompt /></body></html>;
 }
