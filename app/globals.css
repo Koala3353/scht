@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-:root { --teal:#075e60; --canvas:#f4f7f7; --ink:#172233; --orange:#d65a13; --touch-target:44px; }
+:root { color-scheme:light; --teal:#075e60; --canvas:#f4f7f7; --ink:#172233; --orange:#a94308; --touch-target:44px; }
 @theme inline { --color-teal:var(--teal); --color-canvas:var(--canvas); --color-ink:var(--ink); --color-action:var(--orange); }
 * { box-sizing:border-box; }
 html,body { min-height:100%; }
 body { margin:0; background:var(--canvas); color:var(--ink); font-family:ui-sans-serif,system-ui,sans-serif; }
 button,a,input,select,textarea { min-height:var(--touch-target); }
 button,a { -webkit-tap-highlight-color:transparent; }
-@media (prefers-color-scheme:dark) { :root { --canvas:#111b20; --ink:#edf5f4; } }
+:focus-visible { outline:3px solid var(--teal); outline-offset:3px; }
+::placeholder { color:#45556c; opacity:1; }
