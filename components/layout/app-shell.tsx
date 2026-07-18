@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { BookOpen, BriefcaseBusiness, CalendarDays, ClipboardList, GraduationCap, LayoutDashboard, MoreHorizontal, Plus, Settings } from 'lucide-react';
+import { BookOpen, Bot, BriefcaseBusiness, CalendarDays, ClipboardList, GraduationCap, LayoutDashboard, MoreHorizontal, Plus, Settings } from 'lucide-react';
 
-const desktopLinks = [{ href: '/today', label: 'Today', icon: LayoutDashboard }, { href: '/planner', label: 'Planner', icon: ClipboardList }, { href: '/calendar', label: 'Calendar', icon: CalendarDays }, { href: '/subjects', label: 'Subjects', icon: BookOpen }, { href: '/grades', label: 'Grades', icon: GraduationCap }, { href: '/work', label: 'Work', icon: BriefcaseBusiness }, { href: '/settings', label: 'Settings', icon: Settings }];
+const desktopLinks = [{ href: '/today', label: 'Today', icon: LayoutDashboard }, { href: '/planner', label: 'Planner', icon: ClipboardList }, { href: '/calendar', label: 'Calendar', icon: CalendarDays }, { href: '/subjects', label: 'Subjects', icon: BookOpen }, { href: '/grades', label: 'Grades', icon: GraduationCap }, { href: '/work', label: 'Work', icon: BriefcaseBusiness }, { href: '/ai', label: 'AI', icon: Bot }, { href: '/settings', label: 'Settings', icon: Settings }];
 const mobileLinks = [{ href: '/today', label: 'Today', icon: LayoutDashboard }, { href: '/planner', label: 'Planner', icon: ClipboardList }, { href: '/today#new-task-title', label: 'Add task', icon: Plus, primary: true }, { href: '/calendar', label: 'Calendar', icon: CalendarDays }, { href: '/settings', label: 'More', icon: MoreHorizontal }];
 
 export function AppShell({ children, header }: { children: ReactNode; header: ReactNode }) {

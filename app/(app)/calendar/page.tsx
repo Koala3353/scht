@@ -1,0 +1,5 @@
+import { PageHeader } from '@/components/workspace/page-header';
+import { requireUser } from '@/lib/auth/guards';
+import { createClient } from '@/lib/supabase/server';
+
+export default async function CalendarPage() { const user = await requireUser(); const supabase = await createClient(); const { data: tasks } = await supabase.from('tasks').select('id, title, due_at, kind').eq('user_id', user.id).not('due_at', 'is', null).order('due_at').limit(50); return <main><PageHeader eyebrow="CALENDAR" title="Scheduled work">Time-sensitive tasks remain available even if an external calendar connection needs reauthorization.</PageHeader><section className="mx-auto mt-6 max-w-5xl space-y-3 px-4 sm:px-0">{(tasks ?? []).map((task) => <article className="rounded-2xl border border-slate-200 bg-white p-4" key={task.id}><time className="font-bold text-teal" dateTime={task.due_at ?? undefined}>{task.due_at ? new Date(task.due_at).toLocaleString() : 'Unscheduled'}</time><h2 className="mt-1 font-bold">{task.title}</h2><p className="text-sm text-slate-600">{task.kind}</p></article>)}</section></main>; }

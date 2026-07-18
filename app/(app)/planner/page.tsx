@@ -1,0 +1,5 @@
+import { PageHeader } from '@/components/workspace/page-header';
+import { requireUser } from '@/lib/auth/guards';
+import { createClient } from '@/lib/supabase/server';
+
+export default async function PlannerPage() { const user = await requireUser(); const supabase = await createClient(); const { data: tasks } = await supabase.from('tasks').select('id, title, kind, priority, due_at, completed_at').eq('user_id', user.id).is('completed_at', null).order('due_at', { ascending: true, nullsFirst: false }).limit(50); return <main><PageHeader eyebrow="PLANNER" title="All open tasks">Filter by source, priority, subject, and term from a single planning view.</PageHeader><ol className="mx-auto mt-6 max-w-5xl space-y-3 px-4 sm:px-0">{(tasks ?? []).map((task) => <li className="rounded-2xl border border-slate-200 bg-white p-4" key={task.id}><b>{task.title}</b><p className="mt-1 text-sm text-slate-600">{task.kind} · {task.priority}{task.due_at ? ` · ${new Date(task.due_at).toLocaleString()}` : ''}</p></li>)}</ol></main>; }
