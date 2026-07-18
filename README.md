@@ -1,3 +1,15 @@
+# Scht
+
+Scht is an invite-only, local-first school and work planner. Its foundation includes current-term planning, IPS curriculum imports, offline task persistence, and owner-only operational metrics.
+
+## Deployment and verification
+
+Apply the SQL migrations in `supabase/migrations` before sign-in. Set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `NEXT_PUBLIC_APP_URL` (see `.env.example`) in local, Vercel Preview, and Vercel Production environments. The service role key is server-only.
+
+Run `npm ci`, `npm run lint`, `npm run test`, and `npm run build` before deployment. GitHub pull requests should receive a Vercel Preview; merge approved work to `main` to deploy production.
+
+Useful routes: `/today` for the local-first agenda, `/onboarding` for invite setup and IPS import, and `/admin` for owner-only aggregate metrics.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
