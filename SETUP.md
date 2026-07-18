@@ -25,6 +25,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
 NEXT_PUBLIC_APP_URL=http://localhost:3001
 ```
 
+Add these server-only values before connecting integrations:
+
+```env
+INTEGRATION_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
+GOOGLE_OAUTH_CLIENT_ID=<google-web-client-id>
+GOOGLE_OAUTH_CLIENT_SECRET=<google-web-client-secret>
+REMINDER_DISPATCH_TOKEN=<long-random-secret>
+```
+
 Do not add a Supabase secret/service key to `NEXT_PUBLIC_*` variables. The current app does not require one for normal user authentication or data access.
 
 Run on a dedicated port so it does not conflict with another Next.js project:
