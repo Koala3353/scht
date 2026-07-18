@@ -1,5 +1,15 @@
 import { PageHeader } from '@/components/workspace/page-header';
+import { AiVaultPanel } from '@/components/settings/ai-vault-panel';
 import { IntegrationsPanel } from '@/components/settings/integrations-panel';
+import { ReminderPanel } from '@/components/settings/reminder-panel';
+import { requireUser } from '@/lib/auth/guards';
+import { createClient } from '@/lib/supabase/server';
 
-const sections = ['Integrations — Google Calendar, Gmail, and Canvas connections', 'AI vault — encrypted OpenAI or Hack Club AI provider keys', 'Reminders — time zone, quiet hours, and delivery preferences', 'Data — export, retention, and account controls'];
-export default function SettingsPage() { return <main><PageHeader eyebrow="SETTINGS" title="Your workspace controls">Connections expose a clear status: connected, syncing, needs reauthorization, or error.</PageHeader><IntegrationsPanel /><section className="mt-5 max-w-5xl space-y-3">{sections.slice(1).map((section) => <article className="rounded-2xl border border-slate-200 bg-white p-5" key={section}><p className="font-bold">{section}</p></article>)}</section></main>; }
+export default async function SettingsPage() {
+  const user = await requireUser(); const supabase = await createClient();
+  const [{ data: preference }, { data: tasks }] = await Promise.all([
+    supabase.from('reminder_preferences').select('timezone, quiet_start, quiet_end, enabled').eq('user_id', user.id).maybeSingle(),
+    supabase.from('tasks').select('id, title, due_at').eq('user_id', user.id).is('completed_at', null).not('due_at', 'is', null).order('due_at').limit(10),
+  ]);
+  return <main><PageHeader eyebrow="SETTINGS" title="Your workspace controls">Connections expose a clear status: connected, syncing, needs reauthorization, or error.</PageHeader><IntegrationsPanel /><AiVaultPanel /><ReminderPanel preference={preference} tasks={tasks ?? []} /></main>;
+}

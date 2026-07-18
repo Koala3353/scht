@@ -130,3 +130,64 @@ npm run test:e2e
 ```
 
 The browser test placeholders are skipped until a disposable Supabase project and authentication fixtures are configured.
+
+## 9. Follow-on feature configuration
+
+The live integrations, reminders, encrypted AI vault, syllabus approval, grade-entry, and owner operations added after the initial foundation require the configuration below. This section supersedes earlier wording that described reminder dispatch as unavailable.
+
+### Environment variables
+
+The app accepts either public Supabase key name. With the key provided by the Supabase dashboard, use one—not both—of these forms:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+# or: NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
+NEXT_PUBLIC_APP_URL=http://localhost:3001
+
+# Server-only: never prefix these with NEXT_PUBLIC_
+SUPABASE_SERVICE_ROLE_KEY=<service_role key>
+INTEGRATION_ENCRYPTION_KEY=<base64 32-byte key>
+GOOGLE_OAUTH_CLIENT_ID=<Google web OAuth client ID>
+GOOGLE_OAUTH_CLIENT_SECRET=<Google web OAuth client secret>
+REMINDER_DISPATCH_TOKEN=<long random token>
+HACK_CLUB_AI_BASE_URL=https://ai.hackclub.com/v1
+```
+
+Generate the two random values locally:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Use the first as `INTEGRATION_ENCRYPTION_KEY` and the second as `REMINDER_DISPATCH_TOKEN`.
+
+### Google Calendar and Gmail
+
+The Google web OAuth client configured in Supabase must be the same client whose ID and secret are supplied to Scht. In Google Cloud, add Calendar and Gmail read-only scopes to the consent screen. In Scht Settings, choose **Connect Google**, complete consent, then choose **Sync Google**. Imported events appear on Calendar and unread Gmail message subjects become deduplicated planner tasks.
+
+### Canvas
+
+Create a personal access token in your institution’s Canvas account. In Settings, enter the Canvas base URL (for example, `https://canvas.example.edu`) and that token, then choose **Connect Canvas** and **Sync assignments**. Scht validates the connection, encrypts the token using AES-256-GCM before persistence, then imports active courses and assignments into the selected academic term.
+
+### Syllabi, grades, and AI
+
+Upload a syllabus from a subject card. Text-based files have candidate grade weights extracted; review or add categories until the total is exactly 100%, then approve them. Record assessment scores from Grades only after a category has been approved.
+
+In Settings, save an OpenAI or Hack Club AI key through **Encrypted AI key vault** with a passphrase of at least 12 characters. It is encrypted in the browser using PBKDF2 plus AES-GCM before being stored. The AI workbench requires an unlocked key for each proposal and does not write tasks until the user explicitly applies the reviewed result.
+
+### Reminder delivery
+
+After deploying to Vercel, set Apps Script properties as follows:
+
+```text
+SCHT_REMINDER_ENDPOINT=https://<your-vercel-domain>/api/reminders/dispatch
+SCHT_REMINDER_TOKEN=<same REMINDER_DISPATCH_TOKEN>
+```
+
+Create a time-driven trigger for `dispatchSchtReminders` every 15 minutes and grant `UrlFetchApp` and `MailApp` permissions. Users save a time zone and quiet hours in Settings, then schedule a reminder from an open, due-dated task. The protected dispatch route returns pending jobs, Apps Script sends mail, and acknowledges successful or failed delivery.
+
+### Vercel
+
+Set every variable above in Vercel for the environments that use the corresponding feature. Add the Vercel production URL and `/auth/callback` redirect URL to Supabase Authentication URL Configuration. The Apps Script endpoint must point to the deployed production domain, never `localhost`.

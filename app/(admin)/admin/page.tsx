@@ -1,3 +1,4 @@
+import { AdminControls } from '@/components/admin/admin-controls';
 import { MetricCard } from '@/components/admin/metric-card';
 import { RecentAuditLog } from '@/components/admin/recent-audit-log';
 import { requireOwnerAdmin } from '@/lib/auth/guards';
@@ -17,6 +18,7 @@ export default async function AdminPage() {
   const { count: currentTermTasks } = termIds.length > 0
     ? await supabase.from('tasks').select('*', { count: 'exact', head: true }).in('term_id', termIds)
     : { count: 0 };
+  const { data: profiles } = await supabase.from('profiles').select('id, display_name').order('display_name').limit(200);
 
-  return <main className="mx-auto max-w-6xl p-4 sm:p-8"><p className="text-xs font-extrabold tracking-[.14em] text-teal">OWNER ADMIN</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Workspace health</h1><p className="mt-2 max-w-2xl text-slate-600">Aggregate activity and operational signals. Individual workspace content is not shown here.</p><section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><MetricCard label="Active users" value={activeUsers ?? 0} description="Profiles with account access" /><MetricCard label="Current-term tasks" value={currentTermTasks ?? 0} description="Tasks across selected terms" /><MetricCard label="Sync failures" value={syncFailures ?? 0} description="Unresolved synchronization errors" /><MetricCard label="Pending invites" value={pendingInvites ?? 0} description="Invites awaiting acceptance" /></section><div className="mt-6"><RecentAuditLog entries={auditEntries ?? []} /></div></main>;
+  return <main className="mx-auto max-w-6xl p-4 sm:p-8"><p className="text-xs font-extrabold tracking-[.14em] text-teal">OWNER ADMIN</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Workspace health</h1><p className="mt-2 max-w-2xl text-slate-600">Aggregate activity and operational signals. Individual workspace content is not shown here.</p><section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><MetricCard label="Active users" value={activeUsers ?? 0} description="Profiles with account access" /><MetricCard label="Current-term tasks" value={currentTermTasks ?? 0} description="Tasks across selected terms" /><MetricCard label="Sync failures" value={syncFailures ?? 0} description="Unresolved synchronization errors" /><MetricCard label="Pending invites" value={pendingInvites ?? 0} description="Invites awaiting acceptance" /></section><AdminControls profiles={profiles ?? []} /><div className="mt-6"><RecentAuditLog entries={auditEntries ?? []} /></div></main>;
 }

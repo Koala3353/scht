@@ -12,11 +12,13 @@ export function encryptCredentials(values: Record<string, string>) {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key(), iv);
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(values), 'utf8'), cipher.final()]);
-  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]);
+  return `\\x${Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString('hex')}`;
 }
 
-export function decryptCredentials(payload: Uint8Array) {
-  const bytes = Buffer.from(payload);
+export function decryptCredentials(payload: Uint8Array | string) {
+  const bytes = typeof payload === 'string'
+    ? (payload.startsWith('\\x') ? Buffer.from(payload.slice(2), 'hex') : Buffer.from(payload, 'base64'))
+    : Buffer.from(payload);
   const iv = bytes.subarray(0, 12);
   const tag = bytes.subarray(12, 28);
   const ciphertext = bytes.subarray(28);
