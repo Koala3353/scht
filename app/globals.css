@@ -4,8 +4,10 @@
 @theme inline { --color-teal:var(--teal); --color-canvas:var(--canvas); --color-ink:var(--ink); --color-action:var(--orange); }
 * { box-sizing:border-box; }
 html,body { min-height:100%; }
-body { margin:0; background:var(--canvas); color:var(--ink); font-family:ui-sans-serif,system-ui,sans-serif; }
+body { margin:0; overflow-x:hidden; background:var(--canvas); color:var(--ink); font-family:ui-sans-serif,system-ui,sans-serif; }
+h1,h2,h3 { text-wrap:balance; }
 button,a,input,select,textarea { min-height:var(--touch-target); }
+input,select,textarea { max-width:100%; }
 button,a { -webkit-tap-highlight-color:transparent; }
 :focus-visible { outline:3px solid var(--teal); outline-offset:3px; }
 ::placeholder { color:#45556c; opacity:1; }

@@ -13,9 +13,12 @@ export function AppShell({ children, header }: { children: ReactNode; header: Re
           {desktopLinks.map(({ href, label, icon: Icon }) => <a className="flex min-h-11 items-center gap-3 rounded-xl px-3 text-base font-bold transition hover:bg-white/10" href={href} key={href}><Icon size={22} aria-hidden="true" />{label}</a>)}
         </nav>
       </aside>
-      <div className="min-w-0 px-4 py-4 sm:px-6 lg:px-10">
-        <header className="mx-auto mb-6 flex max-w-5xl items-end justify-between gap-4"><a href="/today" className="text-2xl font-bold text-teal lg:hidden">Scht</a>{header}</header>
-        {children}
+      <div className="min-w-0 px-4 py-5 pb-28 sm:px-6 sm:pb-24 lg:px-10 lg:py-8 lg:pb-10">
+        <header className="mx-auto mb-8 flex max-w-6xl flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <a href="/today" className="text-2xl font-bold text-teal lg:hidden">Scht</a>
+          <div className="w-full sm:w-auto">{header}</div>
+        </header>
+        <div className="mx-auto w-full max-w-6xl">{children}</div>
       </div>
       <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-3 z-10 flex min-h-16 items-center justify-around rounded-2xl border bg-white/95 px-1 shadow-lg backdrop-blur lg:hidden">
         {mobileLinks.map(({ href, label, icon: Icon, primary }) => (
