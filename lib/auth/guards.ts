@@ -1,16 +1,12 @@
-import { redirect } from 'next/navigation';
+import { forbidden, redirect } from 'next/navigation';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '../supabase/server';
 
 export type UserRole = 'member' | 'owner_admin';
 
 export interface AuthenticatedUser {
   id: string;
   role: UserRole;
-}
-
-function forbidden(message = 'Forbidden'): never {
-  throw new Response(message, { status: 403 });
 }
 
 export async function requireUser(): Promise<AuthenticatedUser> {
@@ -32,7 +28,7 @@ export async function requireUser(): Promise<AuthenticatedUser> {
 
   const role = profile?.role;
   if (profileError || (role !== 'member' && role !== 'owner_admin')) {
-    return forbidden('Profile is unavailable.');
+    forbidden();
   }
 
   return { id: user.id, role };
@@ -42,7 +38,7 @@ export async function requireOwnerAdmin(): Promise<AuthenticatedUser> {
   const user = await requireUser();
 
   if (user.role !== 'owner_admin') {
-    return forbidden();
+    forbidden();
   }
 
   return user;

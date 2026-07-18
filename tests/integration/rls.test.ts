@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createClient } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -10,20 +11,130 @@ const migration = readFileSync(
   'utf8',
 );
 
-describe('task row-level security migration', () => {
-  it('prevents a member from selecting or changing another member task', () => {
-    expect(migration).toContain('alter table public.tasks enable row level security;');
-    expect(migration).toContain(
-      'for all using (auth.uid() = user_id or public.is_owner_admin())',
-    );
-    expect(migration).toContain(
-      'with check (auth.uid() = user_id or public.is_owner_admin());',
-    );
+function policySql(name: string, table: string): string {
+  const start = migration.indexOf(`create policy "${name}" on public.${table}`);
+  const end = migration.indexOf(';', start);
+
+  if (start < 0 || end < 0) {
+    throw new Error(`Missing ${name} policy on ${table}`);
+  }
+
+  return migration.slice(start, end + 1).replace(/\s+/g, ' ');
+}
+
+const liveRlsEnvironment = {
+  url: process.env.SUPABASE_RLS_TEST_URL,
+  anonKey: process.env.SUPABASE_RLS_TEST_ANON_KEY,
+  memberToken: process.env.SUPABASE_RLS_TEST_MEMBER_TOKEN,
+  otherMemberToken: process.env.SUPABASE_RLS_TEST_OTHER_MEMBER_TOKEN,
+  ownerToken: process.env.SUPABASE_RLS_TEST_OWNER_TOKEN,
+  otherMemberTaskId: process.env.SUPABASE_RLS_TEST_OTHER_MEMBER_TASK_ID,
+};
+
+const hasLiveRlsEnvironment = Object.values(liveRlsEnvironment).every(Boolean);
+const describeLiveRls = hasLiveRlsEnvironment ? describe : describe.skip;
+
+describe('row-level security migration contract', () => {
+  it('enables RLS and scopes every workspace table to its owner with an explicit owner override', () => {
+    for (const table of [
+      'profiles',
+      'invites',
+      'academic_terms',
+      'subjects',
+      'tasks',
+      'curriculum_items',
+      'admin_audit_logs',
+    ]) {
+      expect(migration).toContain(`alter table public.${table} enable row level security;`);
+    }
+
+    const ownerScopedPolicy =
+      'for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());';
+
+    for (const [name, table] of [
+      ['users manage own academic terms', 'academic_terms'],
+      ['users manage own subjects', 'subjects'],
+      ['users manage own tasks', 'tasks'],
+      ['users manage own curriculum items', 'curriculum_items'],
+    ]) {
+      expect(policySql(name, table)).toContain(ownerScopedPolicy);
+    }
   });
 
-  it('permits the owner admin override used for support and administration', () => {
-    expect(migration).toContain('create or replace function public.is_owner_admin()');
-    expect(migration).toContain("where id = auth.uid() and role = 'owner_admin'");
-    expect(migration).toContain('or public.is_owner_admin()');
+  it('rejects cross-profile term and subject references before RLS can be bypassed', () => {
+    const validationFunction = migration.slice(
+      migration.indexOf('create or replace function public.validate_scoped_reference_owners()'),
+      migration.indexOf('create or replace function public.audit_owner_task_change()'),
+    );
+
+    expect(validationFunction).toContain('security definer');
+    expect(validationFunction).toContain(
+      'where id = new.term_id and user_id = new.user_id',
+    );
+    expect(validationFunction).toContain(
+      'where id = new.subject_id and user_id = new.user_id',
+    );
+    expect(validationFunction).toContain(
+      "message = 'Term reference must belong to the same profile'",
+    );
+    expect(validationFunction).toContain(
+      "message = 'Subject reference must belong to the same profile'",
+    );
+    expect(validationFunction).toContain(
+      "message = 'Subject reference must belong to the selected term'",
+    );
+
+    expect(migration).toContain('create trigger subjects_validate_term_owner');
+    expect(migration).toContain('create trigger tasks_validate_reference_owners');
+    expect(migration).toContain('create trigger curriculum_items_validate_reference_owners');
+  });
+});
+
+describeLiveRls('deployed task row-level security', () => {
+  it('hides another member task, rejects writes to it, and permits the owner-admin override', async () => {
+    const { url, anonKey, memberToken, otherMemberToken, ownerToken, otherMemberTaskId } =
+      liveRlsEnvironment as Record<string, string>;
+
+    const member = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${memberToken}` } },
+    });
+    const otherMember = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${otherMemberToken}` } },
+    });
+    const owner = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${ownerToken}` } },
+    });
+
+    const hiddenTask = await member
+      .from('tasks')
+      .select('id')
+      .eq('id', otherMemberTaskId)
+      .maybeSingle();
+    expect(hiddenTask.error).toBeNull();
+    expect(hiddenTask.data).toBeNull();
+
+    const deniedUpdate = await member
+      .from('tasks')
+      .update({ title: 'RLS mutation must not be visible' })
+      .eq('id', otherMemberTaskId)
+      .select('id');
+    expect(deniedUpdate.error).toBeNull();
+    expect(deniedUpdate.data).toEqual([]);
+
+    const otherMemberTask = await otherMember
+      .from('tasks')
+      .select('id')
+      .eq('id', otherMemberTaskId)
+      .single();
+    expect(otherMemberTask.error).toBeNull();
+    expect(otherMemberTask.data?.id).toBe(otherMemberTaskId);
+
+    const ownerTask = await owner
+      .from('tasks')
+      .select('id')
+      .eq('id', otherMemberTaskId)
+      .single();
+    expect(ownerTask.error).toBeNull();
+    expect(ownerTask.data?.id).toBe(otherMemberTaskId);
   });
 });
