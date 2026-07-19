@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { decryptCredentials, encryptCredentials } from "@/lib/integrations/credentials";
-import { googleApi, refreshGoogleCredential, type GoogleCredential } from "@/lib/integrations/google";
-import { createClient } from "@/lib/supabase/server";
+import { decryptCredentials, encryptCredentials } from "../../../../../lib/integrations/credentials";
+import { googleApi, refreshGoogleCredential, type GoogleCredential } from "../../../../../lib/integrations/google";
+import { createClient } from "../../../../../lib/supabase/server";
 
 function bytes(value: unknown) {
   if (typeof value === "string") return value.startsWith("\\x") ? Buffer.from(value.slice(2), "hex") : Buffer.from(value, "base64");
@@ -17,6 +17,12 @@ export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("current_term_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profileError) return NextResponse.json({ error: "Could not read your current term." }, { status: 502 });
 
   const { data: connection, error: connectionError } = await supabase
     .from("integration_connections")
@@ -58,6 +64,7 @@ export async function POST() {
       title: message.payload?.headers?.find((header) => header.name.toLowerCase() === "subject")?.value || "Unread Gmail message",
       kind: "personal",
       priority: "normal",
+      term_id: profile?.current_term_id ?? null,
       notes: message.snippet ?? null,
     }));
     if (tasks.length) {

@@ -18,7 +18,11 @@ type TaskListProps = {
 function relativeDue(dueAt: string | null | undefined) {
   if (!dueAt) return "No deadline";
   const due = new Date(dueAt);
-  const deltaDays = Math.floor((due.getTime() - Date.now()) / 86_400_000);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(due);
+  dueDay.setHours(0, 0, 0, 0);
+  const deltaDays = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
   const dateTime = due.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
   if (deltaDays < 0) return `Overdue · ${dateTime}`;
   if (deltaDays === 0) return `Today · ${dateTime}`;

@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { FilterX, ListFilter } from "lucide-react";
 
-import { TaskList } from "@/components/tasks/task-list";
-import { sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "@/components/tasks/task-editor";
-import { WorkManager } from "@/components/work/work-manager";
-import type { CachedTask, TaskSyncResponse } from "@/lib/sync/types";
+import { TaskList } from "../tasks/task-list";
+import { sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "../tasks/task-editor";
+import { WorkManager } from "../work/work-manager";
+import type { CachedTask, TaskSyncResponse, TaskView } from "../../lib/sync/types";
 
 export type PlannerTask = CachedTask;
 
@@ -18,6 +18,14 @@ type PlannerWorkspaceProps = {
   projects: TaskProject[];
 };
 
+type SaveFailure = {
+  task: CachedTask;
+  baseUpdatedAt: string | null;
+  reason: string;
+  syncState: "conflict" | "rejected";
+  canonicalTask?: TaskView;
+};
+
 export function PlannerWorkspace({ tasks: initialTasks, currentTermId, terms, subjects, projects }: PlannerWorkspaceProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const [source, setSource] = useState("all");
@@ -26,6 +34,7 @@ export function PlannerWorkspace({ tasks: initialTasks, currentTermId, terms, su
   const [project, setProject] = useState("all");
   const [term, setTerm] = useState(currentTermId ?? "all");
   const [status, setStatus] = useState("open");
+  const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null);
   const sources = useMemo(() => [...new Set(tasks.map((task) => task.source))].sort(), [tasks]);
   const visible = tasks.filter((task) =>
     (source === "all" || task.source === source) &&
@@ -39,15 +48,34 @@ export function PlannerWorkspace({ tasks: initialTasks, currentTermId, terms, su
 
   async function saveTask(task: CachedTask, baseUpdatedAt: string | null) {
     setTasks((current) => current.map((candidate) => candidate.id === task.id ? { ...task, syncState: "pending" } : candidate));
-    const response = await fetch("/api/sync/tasks", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ mutations: [{ id: crypto.randomUUID(), userId: task.userId, operation: "upsert", payload: task, baseUpdatedAt }] }),
-    });
-    if (!response.ok) return;
-    const result = await response.json() as TaskSyncResponse;
-    const accepted = result.accepted[0]?.task;
-    if (accepted) setTasks((current) => current.map((candidate) => candidate.id === accepted.id ? { ...accepted, userId: task.userId, syncState: "synced" } : candidate));
+    const mutationId = crypto.randomUUID();
+    const retainFailure = (reason: string, syncState: "conflict" | "rejected" = "rejected", canonicalTask?: TaskView) => {
+      const failedTask: CachedTask = { ...task, syncState, syncError: reason, ...(canonicalTask ? { canonicalTask } : {}) };
+      setTasks((current) => current.map((candidate) => candidate.id === task.id ? failedTask : candidate));
+      setSaveFailure({ task: failedTask, baseUpdatedAt, reason, syncState, canonicalTask });
+    };
+    try {
+      const response = await fetch("/api/sync/tasks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mutations: [{ id: mutationId, userId: task.userId, operation: "upsert", payload: task, baseUpdatedAt }] }),
+      });
+      if (!response.ok) {
+        retainFailure("Task sync failed. Retry this saved change.");
+        return;
+      }
+      const result = await response.json() as TaskSyncResponse;
+      const accepted = result.accepted.find((candidate) => candidate.id === mutationId)?.task;
+      if (accepted) {
+        setTasks((current) => current.map((candidate) => candidate.id === accepted.id ? { ...accepted, userId: task.userId, syncState: "synced" } : candidate));
+        setSaveFailure(null);
+        return;
+      }
+      const rejected = result.rejected.find((candidate) => candidate.id === mutationId);
+      retainFailure(rejected?.reason ?? "Task sync did not acknowledge this saved change.", rejected?.syncState ?? "rejected", rejected?.task);
+    } catch {
+      retainFailure("Task sync failed. Retry this saved change.");
+    }
   }
 
   function clearFilters() {
@@ -68,6 +96,7 @@ export function PlannerWorkspace({ tasks: initialTasks, currentTermId, terms, su
       {filtered && <button className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-teal hover:bg-[#e6f2f0]" type="button" onClick={clearFilters}><FilterX className="size-4" aria-hidden="true" />Clear filters</button>}
     </div>
     <div className="mt-5"><TaskList currentTermId={currentTermId} onSave={saveTask} projects={projects} subjects={subjects} tasks={visible} terms={terms} /></div>
+    {saveFailure && <section className="mt-5 rounded-xl border border-action/30 bg-[#fff8f3] p-4 text-sm text-slate-700" role="status"><p className="font-semibold text-action">{saveFailure.reason}</p><div className="mt-3 flex flex-wrap gap-3"><button className="min-h-11 rounded-xl border border-action px-4 py-2 font-bold text-action" onClick={() => void saveTask(saveFailure.task, saveFailure.canonicalTask?.updatedAt ?? saveFailure.baseUpdatedAt)} type="button">Retry saved change</button>{saveFailure.canonicalTask && <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 font-bold text-ink" onClick={() => { const canonicalTask = { ...saveFailure.canonicalTask!, userId: saveFailure.task.userId, syncState: "synced" as const }; setTasks((current) => current.map((candidate) => candidate.id === canonicalTask.id ? canonicalTask : candidate)); setSaveFailure(null); }} type="button">Use latest server version</button>}</div></section>}
     <div className="mt-8"><WorkManager initialProjects={projects.map((item) => ({ id: item.id, name: item.label, status: item.status }))} tasks={tasks.filter((task) => !task.completedAt).map((task) => ({ id: task.id, title: task.title, projectId: task.projectId ?? null, dueAt: task.dueAt ?? null }))} /></div>
   </section>;
 }

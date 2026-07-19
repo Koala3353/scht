@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TaskEditor } from "../../components/tasks/task-editor";
-import { TaskList } from "../../components/tasks/task-list";
+import { TaskList, relativeDue } from "../../components/tasks/task-list";
 import type { CachedTask } from "../../lib/sync/types";
 
 const userId = "0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f";
@@ -46,18 +46,19 @@ afterEach(cleanup);
 describe("shared task workspace", () => {
   it("captures the complete task record from labelled controls", async () => {
     const onSave = vi.fn();
-    render(<TaskEditor {...context} currentTermId={termId} onSave={onSave} task={task()} />);
+    render(<TaskEditor {...context} currentTermId={termId} onSave={onSave} task={task({ termId: null })} />);
     const user = userEvent.setup();
 
+    expect(screen.getByRole("option", { name: "MATH 121 · Quantitative reasoning" })).not.toBeNull();
     await user.clear(screen.getByLabelText("Title"));
     await user.type(screen.getByLabelText("Title"), "Submit field report");
     await user.click(screen.getByLabelText("No deadline"));
+    await user.type(screen.getByLabelText("Due date and time"), "2026-07-22T09:15");
     await user.type(screen.getByLabelText("Description"), "Include observations.");
     await user.selectOptions(screen.getByLabelText("Type"), "personal");
     await user.selectOptions(screen.getByLabelText("Priority"), "high");
     await user.clear(screen.getByLabelText("Effort (minutes)"));
     await user.type(screen.getByLabelText("Effort (minutes)"), "45");
-    await user.selectOptions(screen.getByLabelText("Term"), termId);
     await user.selectOptions(screen.getByLabelText("Subject"), subjectId);
     await user.selectOptions(screen.getByLabelText("Project"), projectId);
     await user.clear(screen.getByLabelText("Grade impact (%)"));
@@ -67,7 +68,7 @@ describe("shared task workspace", () => {
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
       title: "Submit field report",
-      dueAt: null,
+      dueAt: new Date("2026-07-22T09:15").toISOString(),
       description: "Include observations.",
       kind: "personal",
       priority: "high",
@@ -101,5 +102,21 @@ describe("shared task workspace", () => {
     await user.click(screen.getByRole("button", { name: "Edit Canvas assignment" }));
     expect(screen.getByLabelText("Description")).not.toBeNull();
     expect(screen.getByText(/Imported from Canvas/)).not.toBeNull();
+    await user.clear(screen.getByLabelText("Due date and time"));
+    await user.type(screen.getByLabelText("Due date and time"), "2026-07-23T13:45");
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+    expect(onSave).toHaveBeenLastCalledWith(expect.objectContaining({
+      dueAt: new Date("2026-07-23T13:45").toISOString(),
+      source: "canvas",
+      sourceId: "canvas-42",
+    }), "2026-07-19T10:00:00.000Z");
+  });
+
+  it("uses calendar days for relative due labels", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-19T12:00:00.000Z"));
+
+    expect(relativeDue("2026-07-20T12:00:00.000Z")).toContain("Tomorrow");
+    vi.useRealTimers();
   });
 });

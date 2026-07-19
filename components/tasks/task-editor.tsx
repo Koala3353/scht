@@ -40,7 +40,7 @@ export function TaskEditor({
   onCancel,
   submitLabel = "Save task",
 }: TaskEditorProps) {
-  const [draft, setDraft] = useState(task);
+  const [draft, setDraft] = useState(() => ({ ...task, termId: task.termId ?? currentTermId }));
   const [noDeadline, setNoDeadline] = useState(!task.dueAt);
   const [linksText, setLinksText] = useState(task.links.join("\n"));
   const [saving, setSaving] = useState(false);
