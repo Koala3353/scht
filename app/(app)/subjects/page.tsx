@@ -134,7 +134,7 @@ export default async function SubjectsPage() {
               subjectId={subject.id}
               syllabus={newestSyllabus.get(subject.id) ?? null}
             />
-            <SubjectTaskQueue approvedCategoryLabels={categories.filter((category) => category.subject_id === subject.id).map((category) => category.name)} currentTermId={profile?.current_term_id ?? null} initialTasks={openTasksBySubject.get(subject.id) ?? []} projects={projects.map((project) => ({ id: project.id, label: project.name, status: project.status as "active" | "archived" }))} subjects={subjects.map((item) => ({ id: item.id, termId: item.term_id, label: `${item.code} · ${item.name}` }))} terms={terms.map((term) => ({ id: term.id, label: `${term.name} ${term.academic_year}` }))} />
+            <SubjectTaskQueue approvedCategoryLabels={categories.filter((category) => category.subject_id === subject.id).map((category) => category.name)} currentTermId={profile?.current_term_id ?? null} initialTasks={openTasksBySubject.get(subject.id) ?? []} projects={projects.map((project) => ({ id: project.id, label: project.name, status: project.status as "active" | "archived" }))} representedSubjectId={subject.id} subjects={subjects.map((item) => ({ id: item.id, termId: item.term_id, label: `${item.code} · ${item.name}` }))} terms={terms.map((term) => ({ id: term.id, label: `${term.name} ${term.academic_year}` }))} />
           </article>
         ))}
       </section>

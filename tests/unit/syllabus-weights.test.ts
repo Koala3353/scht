@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { createElement } from 'react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -24,7 +24,7 @@ describe('syllabus assessment weights', () => {
       return { ok: true, json: async () => ({ accepted: [{ id: body.mutations[0]?.id, task: body.mutations[0]?.payload }], rejected: [] }) } as Response;
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(createElement(SubjectTaskQueue, { approvedCategoryLabels: ['Reflections'], currentTermId: 'term-1', initialTasks: [task], projects: [], subjects: [{ id: 'subject-1', termId: 'term-1', label: 'HIST 101 · History' }], terms: [{ id: 'term-1', label: 'Fall 2026' }] }));
+    render(createElement(SubjectTaskQueue, { approvedCategoryLabels: ['Reflections'], currentTermId: 'term-1', initialTasks: [task], projects: [], representedSubjectId: 'subject-1', subjects: [{ id: 'subject-1', termId: 'term-1', label: 'HIST 101 · History' }], terms: [{ id: 'term-1', label: 'Fall 2026' }] }));
     const user = userEvent.setup();
 
     expect(screen.getByRole('heading', { name: 'Next open assignment' })).not.toBeNull();
@@ -36,5 +36,24 @@ describe('syllabus assessment weights', () => {
     await user.click(screen.getByRole('button', { name: 'Complete Research reflection' }));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('removes an accepted reassignment from the represented subject queue', async () => {
+    const task: CachedTask = { id: 'task-1', userId: 'user-1', title: 'Research reflection', kind: 'school', dueAt: '2026-07-24T09:30:00.000Z', priority: 'normal', termId: 'term-1', subjectId: 'subject-1', projectId: null, weightPercent: 20, description: '', links: [], effortMinutes: null, completedAt: null, updatedAt: '2026-07-19T00:00:00.000Z', syncState: 'synced', source: 'manual', sourceId: null };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { mutations: Array<{ id: string; payload: CachedTask }> };
+      return { ok: true, json: async () => ({ accepted: [{ id: body.mutations[0]?.id, task: body.mutations[0]?.payload }], rejected: [] }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(createElement(SubjectTaskQueue, { approvedCategoryLabels: ['Reflections'], currentTermId: 'term-1', initialTasks: [task], projects: [], representedSubjectId: 'subject-1', subjects: [{ id: 'subject-1', termId: 'term-1', label: 'HIST 101 · History' }, { id: 'subject-2', termId: 'term-1', label: 'LIT 102 · Literature' }], terms: [{ id: 'term-1', label: 'Fall 2026' }] }));
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Edit Research reflection' }));
+    await user.selectOptions(screen.getByLabelText('Subject'), 'subject-2');
+    await user.click(screen.getByRole('button', { name: 'Save task' }));
+
+    await waitFor(() => expect(screen.getByText('No open tasks.')).not.toBeNull());
+    expect(screen.queryByRole('button', { name: 'Copy AI starter prompt' })).toBeNull();
+    expect(screen.queryByText('Reflections')).toBeNull();
   });
 });
