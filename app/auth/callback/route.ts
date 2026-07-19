@@ -11,7 +11,7 @@ function redirectTo(request: NextRequest, path: string, clearGooglePending = fal
 }
 
 export async function GET(request: NextRequest) {
-  const isGoogleIntegration = request.cookies.get(pendingCookie)?.value === '1';
+  const isGoogleIntegration = request.nextUrl.searchParams.get("integration") === "google" || request.cookies.get(pendingCookie)?.value === "1";
   const code = request.nextUrl.searchParams.get('code');
   if (!code) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=missing-auth-code', isGoogleIntegration);
 

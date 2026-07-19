@@ -32,8 +32,8 @@ export async function POST() {
     if (credentials.expiresAt && new Date(credentials.expiresAt) <= new Date()) credentials = await refreshGoogleCredential(credentials);
     const now = new Date();
     const [calendar, messages] = await Promise.all([
-      googleApi<{ items?: Array<{ id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }> }>(credentials, "https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=" + encodeURIComponent(now.toISOString()) + "&maxResults=100"),
-      googleApi<{ messages?: Array<{ id: string }> }>(credentials, "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=is%3Aunread"),
+      googleApi<{ items?: Array<{ id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }> }>(credentials, "https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=" + encodeURIComponent(now.toISOString()) + "&maxResults=100", "Google Calendar"),
+      googleApi<{ messages?: Array<{ id: string }> }>(credentials, "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=is%3Aunread", "Gmail"),
     ]);
     const events = (calendar.items ?? []).map((event) => ({
       user_id: user.id,
@@ -50,7 +50,7 @@ export async function POST() {
       const { error } = await supabase.from("calendar_events").upsert(events, { onConflict: "user_id,provider,source_id" });
       if (error) throw new Error("Could not save Google Calendar events.");
     }
-    const messageDetails = await Promise.all((messages.messages ?? []).map((message) => googleApi<{ id: string; snippet?: string; payload?: { headers?: Array<{ name: string; value: string }> } }>(credentials, "https://gmail.googleapis.com/gmail/v1/users/me/messages/" + message.id + "?format=metadata&metadataHeaders=Subject")));
+    const messageDetails = await Promise.all((messages.messages ?? []).map((message) => googleApi<{ id: string; snippet?: string; payload?: { headers?: Array<{ name: string; value: string }> } }>(credentials, "https://gmail.googleapis.com/gmail/v1/users/me/messages/" + message.id + "?format=metadata&metadataHeaders=Subject", "Gmail")));
     const tasks = messageDetails.map((message) => ({
       user_id: user.id,
       source: "gmail",

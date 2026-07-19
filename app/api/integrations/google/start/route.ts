@@ -8,16 +8,14 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL('/?error=authentication-required', request.url));
 
-  const callbackUrl = new URL(
-    '/auth/callback',
-    process.env.NEXT_PUBLIC_APP_URL ?? request.url,
-  ).toString();
+  const callbackUrl = new URL("/auth/callback", process.env.NEXT_PUBLIC_APP_URL ?? request.url);
+  callbackUrl.searchParams.set("integration", "google");
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: callbackUrl,
+      redirectTo: callbackUrl.toString(),
       scopes: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly',
-      queryParams: { access_type: 'offline', prompt: 'consent' },
+      queryParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' },
     },
   });
 
