@@ -58,7 +58,7 @@ export default async function SettingsPage({
           )}
           {params.integration === "google-error" && (
             <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert">
-              Google could not connect. Confirm the Supabase redirect allowlist includes this app’s integration callback, then try again.
+              Google could not connect. Confirm your Google test-user access, Google provider credentials, and the Supabase sign-in callback, then try again.
             </p>
           )}
           <IntegrationsPanel />

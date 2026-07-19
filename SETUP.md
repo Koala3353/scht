@@ -99,9 +99,7 @@ In Supabase Dashboard → Authentication → URL Configuration:
 
   ```text
   http://localhost:3001/auth/callback
-  http://localhost:3001/api/integrations/google/callback
   https://scht-admu.vercel.app/auth/callback
-  https://scht-admu.vercel.app/api/integrations/google/callback
   ```
 
   Add your own Vercel production URL instead if it differs. Add a preview URL only when you deliberately support auth in previews.
