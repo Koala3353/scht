@@ -5,7 +5,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: { default: 'Scht', template: '%s · Scht' },
-  description: 'Your school and work flow, in one place.',
+  description: 'Scht is a private academic planner that helps students organize courses, deadlines, grades, and optional connected services.',
   manifest: '/manifest.webmanifest',
 };
 

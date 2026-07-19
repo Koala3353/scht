@@ -70,7 +70,7 @@ export function LandingPage() {
           <div className="max-w-2xl">
             <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-bold text-teal-50">
               <span className="h-1.5 w-1.5 rounded-full bg-[#f3b68b]" />
-              Your academic life, in one considered place
+              SCHT · PRIVATE ACADEMIC PLANNER
             </p>
             <h1 className="max-w-xl text-5xl font-black leading-[.94] tracking-[-0.055em] text-wrap-balance sm:text-6xl lg:text-7xl">
               Less scramble.
@@ -78,8 +78,7 @@ export function LandingPage() {
               <span className="text-[#c7e6dd]">More direction.</span>
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-teal-50/90 sm:text-xl">
-              Scht is the private workspace for students who want deadlines,
-              courses, grades, and real life to make sense together.
+              Scht is a private academic planner for students. It organizes courses, deadlines, grades, and optional Google Calendar, Gmail, and Canvas connections into one reviewable personal timeline.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link
@@ -98,7 +97,7 @@ export function LandingPage() {
             </div>
             <p className="mt-5 flex items-center gap-2 text-sm text-teal-100">
               <ShieldCheck className="size-4 text-[#c7e6dd]" />
-              Private by design. You decide what connects.
+              Private by design. You decide what connects. Google data is read only after you choose to connect it.
             </p>
           </div>
           <div
