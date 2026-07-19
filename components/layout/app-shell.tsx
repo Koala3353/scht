@@ -46,9 +46,11 @@ function isCurrent(pathname: string, href: string) {
 export function AppShell({
   children,
   header,
+  hasIntegrationAttention = false,
 }: {
   children: ReactNode;
   header: ReactNode;
+  hasIntegrationAttention?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -106,8 +108,9 @@ export function AppShell({
               }`}
               href="/settings"
             >
-              <Settings aria-hidden="true" size={19} strokeWidth={2.25} />
+              <span className="relative grid place-items-center"><Settings aria-hidden="true" size={19} strokeWidth={2.25} />{hasIntegrationAttention ? <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 size-2.5 rounded-full bg-red-500 ring-2 ring-[#073f42]" /> : null}</span>
               Settings
+              {hasIntegrationAttention ? <span className="sr-only">A connection needs attention</span> : null}
             </a>
             <p className="px-3 pt-4 text-xs leading-5 text-[#b8d8d1]">
               Your data stays in your workspace. Connections are always
@@ -137,6 +140,7 @@ export function AppShell({
       >
         {mobileLinks.map(({ href, label, icon: Icon, primary }) => {
           const current = isCurrent(pathname, href.split("#")[0]);
+          const hasAttention = hasIntegrationAttention && href === "/settings";
           return (
             <a
               aria-current={current ? "page" : undefined}
@@ -150,8 +154,9 @@ export function AppShell({
               href={href}
               key={label}
             >
-              <Icon aria-hidden="true" size={19} strokeWidth={2.25} />
+              <span className="relative grid place-items-center"><Icon aria-hidden="true" size={19} strokeWidth={2.25} />{hasAttention ? <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 size-2.5 rounded-full bg-red-500 ring-2 ring-white" /> : null}</span>
               <span>{label}</span>
+              {hasAttention ? <span className="sr-only">A connection needs attention</span> : null}
             </a>
           );
         })}

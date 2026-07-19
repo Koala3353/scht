@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { GraduationCap } from "lucide-react";
+import { useToast } from "../feedback/toast-provider";
 
 export function AcademicScalePanel({
   academicScale,
@@ -10,6 +11,7 @@ export function AcademicScalePanel({
   academicScale: "qpi" | "gpa";
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [scale, setScale] = useState(academicScale);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,11 +27,11 @@ export function AcademicScalePanel({
     });
     const body = (await response.json()) as { error?: string };
     if (response.ok) router.refresh();
-    setNotice(
-      response.ok
-        ? `${nextScale === "qpi" ? "Ateneo QPI" : "4.0 GPA"} selected. Your grade summary is updated.`
-        : (body.error ?? "Could not update your academic scale."),
-    );
+    const message = response.ok
+      ? (nextScale === "qpi" ? "Ateneo QPI" : "4.0 GPA") + " selected. Your grade summary is updated."
+      : (body.error ?? "Could not update your academic scale.");
+    setNotice(message);
+    toast(message, response.ok ? "success" : "error");
     if (!response.ok) setScale(academicScale);
     setBusy(false);
   }

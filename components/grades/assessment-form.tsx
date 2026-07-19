@@ -1,12 +1,18 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { useToast } from '../feedback/toast-provider';
 
 type Category = { id: string; subject_id: string; name: string; weight_percent: number };
 type Subject = { id: string; code: string; name: string };
 
 export function AssessmentForm({ categories, subjects }: { categories: Category[]; subjects: Subject[] }) {
+  const { toast } = useToast();
   const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? ''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
   const visibleCategories = categories.filter((category) => category.subject_id === subjectId);
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); setBusy(true); setNotice(''); const response = await fetch('/api/grades/results', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ subjectId, categoryId: form.get('categoryId'), title: form.get('title'), score: Number(form.get('score')), possibleScore: Number(form.get('possibleScore')), assessedAt: form.get('assessedAt') || null }) }); const body = await response.json() as { error?: string }; setNotice(response.ok ? 'Assessment recorded. Refresh this page to update the summary.' : body.error ?? 'Could not record the assessment.'); setBusy(false); if (response.ok) event.currentTarget.reset(); }
   if (!subjects.length) return null;

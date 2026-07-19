@@ -15,7 +15,7 @@ export default async function SettingsPage({
   const params = await searchParams;
   const user = await requireUser();
   const supabase = await createClient();
-  const [{ data: preference }, { data: tasks }, { data: profile }, { data: googleConnection }] =
+  const [{ data: preference }, { data: tasks }, { data: profile }, { data: connections }] =
     await Promise.all([
       supabase
         .from("reminder_preferences")
@@ -37,11 +37,13 @@ export default async function SettingsPage({
         .maybeSingle(),
       supabase
         .from("integration_connections")
-        .select("status, last_synced_at, error_message")
+        .select("provider, status, last_synced_at, error_message, settings")
         .eq("user_id", user.id)
-        .eq("provider", "google")
-        .maybeSingle(),
+        .in("provider", ["google", "canvas"]),
     ]);
+
+  const googleConnection = connections?.find((connection) => connection.provider === "google") ?? null;
+  const canvasConnection = connections?.find((connection) => connection.provider === "canvas") ?? null;
 
   return (
     <main className="pb-8">
@@ -67,7 +69,7 @@ export default async function SettingsPage({
               Google could not connect. Confirm your Google test-user access, Google provider credentials, and the Supabase sign-in callback, then try again.
             </p>
           )}
-          <IntegrationsPanel initialGoogleConnection={googleConnection} />
+          <IntegrationsPanel initialCanvasConnection={canvasConnection} initialGoogleConnection={googleConnection} />
           <AiVaultPanel connectedDataOptIn={profile?.ai_connected_data_opt_in === true} />
           <AcademicScalePanel
             academicScale={profile?.academic_scale === "gpa" ? "gpa" : "qpi"}

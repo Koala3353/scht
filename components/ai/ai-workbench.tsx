@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useToast } from "../feedback/toast-provider";
 import { buildAiTaskPrompt } from "@/lib/ai/proposals";
 
 type Proposal = {
@@ -11,6 +12,7 @@ type Proposal = {
 };
 
 export function AiWorkbench() {
+  const { toast } = useToast();
   const [provider, setProvider] = useState<"openai" | "hackclub">("openai");
   const [apiKey, setApiKey] = useState(() => {
     try {
@@ -30,6 +32,10 @@ export function AiWorkbench() {
   const [conversationId, setConversationId] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
   function chooseProvider(nextProvider: "openai" | "hackclub") {
     setProvider(nextProvider);
     try {

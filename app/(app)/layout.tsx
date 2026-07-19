@@ -16,7 +16,7 @@ export default async function AuthenticatedLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await requireUser();
   const supabase = await createClient();
-  const [{ data: profile }, { data: terms }] = await Promise.all([
+  const [{ data: profile }, { data: terms }, { data: connections }] = await Promise.all([
     supabase
       .from("profiles")
       .select("current_term_id")
@@ -27,6 +27,11 @@ export default async function AuthenticatedLayout({
       .select("id, academic_year, name")
       .eq("user_id", user.id)
       .order("academic_year", { ascending: false }),
+    supabase
+      .from("integration_connections")
+      .select("status")
+      .eq("user_id", user.id)
+      .in("provider", ["google", "canvas"]),
   ]);
   const options = (terms ?? []).map((term) => ({
     id: term.id,
@@ -49,5 +54,9 @@ export default async function AuthenticatedLayout({
     </div>
   );
 
-  return <AppShell header={header}>{children}</AppShell>;
+  const hasIntegrationAttention = (connections ?? []).some(
+    (connection) => connection.status === "error",
+  );
+
+  return <AppShell header={header} hasIntegrationAttention={hasIntegrationAttention}>{children}</AppShell>;
 }

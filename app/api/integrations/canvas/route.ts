@@ -63,8 +63,9 @@ export async function POST(request: Request) {
             provider: "canvas",
             status: "connected",
             encrypted_credentials: encryptCredentials({ baseUrl, token }),
-            settings: { courseCount: courses.length },
+            settings: { courseCount: courses.length, baseUrl },
             error_message: null,
+            last_synced_at: new Date().toISOString(),
           },
           { onConflict: "user_id,provider" },
         );
@@ -73,13 +74,7 @@ export async function POST(request: Request) {
           { error: "Could not securely save this Canvas connection." },
           { status: 502 },
         );
-      return NextResponse.json({
-        courses: courses.map((course) => ({
-          id: course.id,
-          code: course.course_code,
-          name: course.name,
-        })),
-      });
+      return NextResponse.json({ courses: courses.length });
     } catch (error) {
       return NextResponse.json(
         {

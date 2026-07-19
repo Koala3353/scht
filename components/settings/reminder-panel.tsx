@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { BellRing, Clock3, MailCheck, Sparkles } from "lucide-react";
+import { useToast } from "../feedback/toast-provider";
 
 type Task = { id: string; title: string; due_at: string | null };
 type Preference = {
@@ -23,6 +24,7 @@ export function ReminderPanel({
   preference: Preference;
   tasks: Task[];
 }) {
+  const { toast } = useToast();
   const [enabled, setEnabled] = useState(preference?.enabled ?? true);
   const [digestEnabled, setDigestEnabled] = useState(preference?.digest_enabled ?? false);
   const [digestFrequency, setDigestFrequency] = useState<"daily" | "weekly">(preference?.digest_frequency === "weekly" ? "weekly" : "daily");
@@ -50,11 +52,9 @@ export function ReminderPanel({
       }),
     });
     const body = (await response.json()) as { error?: string };
-    setNotice(
-      response.ok
-        ? "Reminder preferences and your email timeline are saved."
-        : (body.error ?? "Could not save preferences."),
-    );
+    const message = response.ok ? "Reminder preferences and your email timeline are saved." : (body.error ?? "Could not save preferences.");
+    setNotice(message);
+    toast(message, response.ok ? "success" : "error");
     setBusy(false);
   }
 
@@ -66,11 +66,9 @@ export function ReminderPanel({
       body: JSON.stringify({ taskId }),
     });
     const body = (await response.json()) as { error?: string; sendAt?: string };
-    setNotice(
-      response.ok
-        ? `Reminder scheduled for ${body.sendAt ? new Date(body.sendAt).toLocaleString() : "your task deadline"}.`
-        : (body.error ?? "Could not schedule reminder."),
-    );
+    const message = response.ok ? "Reminder scheduled for " + (body.sendAt ? new Date(body.sendAt).toLocaleString() : "your task deadline") + "." : (body.error ?? "Could not schedule reminder.");
+    setNotice(message);
+    toast(message, response.ok ? "success" : "error");
     setBusy(false);
   }
 

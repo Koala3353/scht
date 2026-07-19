@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useToast } from "../feedback/toast-provider";
 
 export function SubjectUnitsEditor({
   subjectId,
@@ -9,9 +10,14 @@ export function SubjectUnitsEditor({
   subjectId: string;
   initialUnits: number;
 }) {
+  const { toast } = useToast();
   const [units, setUnits] = useState(String(initialUnits));
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
   async function save() {
     setBusy(true);
     const response = await fetch("/api/subjects/units", {

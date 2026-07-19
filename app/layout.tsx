@@ -1,5 +1,6 @@
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import { MobileInstallPrompt } from '@/components/pwa/mobile-install-prompt';
+import { ToastProvider } from '../components/feedback/toast-provider';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
@@ -12,5 +13,5 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { themeColor: '#075e60' };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}<ServiceWorkerRegister /><MobileInstallPrompt /></body></html>;
+  return <html lang="en"><body><ToastProvider>{children}</ToastProvider><ServiceWorkerRegister /><MobileInstallPrompt /></body></html>;
 }

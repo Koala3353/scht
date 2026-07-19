@@ -1,14 +1,20 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useToast } from "../feedback/toast-provider";
 
 type Profile = { id: string; display_name: string | null };
 type ProvisionedAccount = { email: string; googleAudienceUrl: string };
 
 export function AdminControls({ profiles }: { profiles: Profile[] }) {
+  const { toast } = useToast();
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [userId, setUserId] = useState(profiles[0]?.id ?? "");
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
   const [provisionedAccount, setProvisionedAccount] =
     useState<ProvisionedAccount | null>(null);
 

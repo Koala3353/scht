@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useToast } from "../feedback/toast-provider";
 import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import {
   decryptVault,
@@ -23,6 +24,7 @@ function fromBytea(value: string) {
 const sessionVaultKey = "scht-unlocked-ai-keys";
 
 export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boolean }) {
+  const { toast } = useToast();
   const [provider, setProvider] = useState<"openai" | "hackclub">("openai");
   const [apiKey, setApiKey] = useState("");
   const [passphrase, setPassphrase] = useState("");
@@ -30,6 +32,11 @@ export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boole
   const [busy, setBusy] = useState(false);
   const [connectedDataAllowed, setConnectedDataAllowed] = useState(connectedDataOptIn);
   const [privacyBusy, setPrivacyBusy] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useToast } from "../feedback/toast-provider";
 import { Archive, FolderPlus, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -9,10 +10,16 @@ type Task = { id: string; title: string; projectId: string | null; dueAt: string
 
 export function WorkManager({ initialProjects, tasks }: { initialProjects: Project[]; tasks: Task[] }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [projects, setProjects] = useState(initialProjects);
   const [name, setName] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
 
   async function request(method: "POST" | "PATCH", body: Record<string, unknown>) {
     const response = await fetch("/api/projects", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });

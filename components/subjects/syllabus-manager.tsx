@@ -1,15 +1,21 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useToast } from '../feedback/toast-provider';
 
 type Weight = { name: string; weightPercent: number };
 type Syllabus = { id: string; candidate_weights: Weight[]; validation_state: string } | null;
 
 export function SyllabusManager({ subjectId, syllabus: initialSyllabus }: { subjectId: string; syllabus: Syllabus }) {
+  const { toast } = useToast();
   const [syllabus, setSyllabus] = useState(initialSyllabus);
   const [weights, setWeights] = useState<Weight[]>(initialSyllabus?.candidate_weights ?? []);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!notice) return;
+    toast(notice, /could not|failed|did not|error|blocked/i.test(notice) ? "error" : "success");
+  }, [notice, toast]);
   const total = useMemo(() => weights.reduce((sum, weight) => sum + Number(weight.weightPercent || 0), 0), [weights]);
 
   async function upload(event: FormEvent<HTMLFormElement>) {

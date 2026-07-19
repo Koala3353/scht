@@ -1,13 +1,16 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useToast } from "../feedback/toast-provider";
+import { useRouter } from "next/navigation";
 import { CalendarDays, CheckCircle2, Cloud, Link2, RefreshCw, TriangleAlert } from "lucide-react";
 
 type Notice = { kind: "error" | "success"; text: string } | null;
-type GoogleConnection = {
+type IntegrationConnection = {
   status: string;
   last_synced_at: string | null;
   error_message: string | null;
+  settings?: unknown;
 } | null;
 
 async function responseBody(response: Response) {
@@ -20,18 +23,29 @@ async function responseBody(response: Response) {
   };
 }
 
-export function IntegrationsPanel({ initialGoogleConnection }: { initialGoogleConnection: GoogleConnection }) {
+export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnection }: { initialGoogleConnection: IntegrationConnection; initialCanvasConnection: IntegrationConnection }) {
   const [canvasUrl, setCanvasUrl] = useState("");
   const [canvasToken, setCanvasToken] = useState("");
   const [googleConnection, setGoogleConnection] = useState(initialGoogleConnection);
+  const [canvasConnection, setCanvasConnection] = useState(initialCanvasConnection);
+  const { toast } = useToast();
+  const router = useRouter();
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   const googleConnected = googleConnection?.status === "connected";
+  const canvasConnected = canvasConnection?.status === "connected";
+  const canvasBaseUrl = canvasConnection?.settings && typeof canvasConnection.settings === "object" && "baseUrl" in canvasConnection.settings && typeof canvasConnection.settings.baseUrl === "string" ? canvasConnection.settings.baseUrl : null;
+  const canvasHost = canvasBaseUrl ? new URL(canvasBaseUrl).host : null;
+
+  function updateNotice(next: Notice) {
+    setNotice(next);
+    if (next) toast(next.text, next.kind);
+  }
 
   async function canvas(action: "connect" | "sync", event?: FormEvent) {
     event?.preventDefault();
     setBusy(true);
-    setNotice(null);
+    updateNotice(null);
     try {
       const response = await fetch("/api/integrations/canvas", {
         method: "POST",
@@ -39,29 +53,38 @@ export function IntegrationsPanel({ initialGoogleConnection }: { initialGoogleCo
         body: JSON.stringify({ action, baseUrl: canvasUrl, token: canvasToken }),
       });
       const body = await responseBody(response);
-      setNotice(response.ok
-        ? { kind: "success", text: action === "connect" ? "Canvas connected. " + (body.courses ?? 0) + " active courses found." : "Canvas sync complete. " + (body.assignments ?? 0) + " assignments imported." }
-        : { kind: "error", text: body.error ?? "Canvas request failed." });
+      const nextNotice = response.ok
+        ? { kind: "success" as const, text: action === "connect" ? "Canvas connected. " + (body.courses ?? 0) + " active courses found." : "Canvas sync complete. " + (body.assignments ?? 0) + " assignments imported." }
+        : { kind: "error" as const, text: body.error ?? "Canvas request failed." };
+      if (response.ok) {
+        setCanvasConnection((current) => ({ status: "connected", last_synced_at: new Date().toISOString(), error_message: null, settings: action === "connect" && canvasUrl ? { baseUrl: canvasUrl } : current?.settings }));
+        if (action === "connect") { setCanvasToken(""); setCanvasUrl(""); }
+      } else if (action === "sync") {
+        setCanvasConnection((current) => current ? { ...current, status: "error", error_message: nextNotice.text } : current);
+      }
+      updateNotice(nextNotice);
     } catch {
-      setNotice({ kind: "error", text: "Canvas could not be reached. Check the URL and try again." });
+      if (action === "sync") setCanvasConnection((current) => current ? { ...current, status: "error", error_message: "Canvas could not be reached. Check your connection and try again." } : current);
+      updateNotice({ kind: "error", text: "Canvas could not be reached. Check the URL and try again." });
     } finally {
       setBusy(false);
+      router.refresh();
     }
   }
 
   async function syncGoogle() {
     if (!googleConnected) {
-      setNotice({ kind: "error", text: "Connect Google before syncing." });
+      updateNotice({ kind: "error", text: "Connect Google before syncing." });
       return;
     }
     setBusy(true);
-    setNotice(null);
+    updateNotice(null);
     try {
       const response = await fetch("/api/integrations/google/sync", { method: "POST" });
       const body = await responseBody(response);
       if (!response.ok) {
         setGoogleConnection((current) => current ? { ...current, status: "error", error_message: body.error ?? "Google sync failed." } : current);
-        setNotice({ kind: "error", text: body.error ?? "Google sync failed." });
+        updateNotice({ kind: "error", text: body.error ?? "Google sync failed." });
         return;
       }
       setGoogleConnection((current) => ({
@@ -70,13 +93,21 @@ export function IntegrationsPanel({ initialGoogleConnection }: { initialGoogleCo
         last_synced_at: new Date().toISOString(),
         error_message: null,
       }));
-      setNotice({ kind: "success", text: "Google sync complete. " + (body.calendarEvents ?? 0) + " calendar events and " + (body.gmailTasks ?? 0) + " Gmail tasks imported." });
+      updateNotice({ kind: "success", text: "Google sync complete. " + (body.calendarEvents ?? 0) + " calendar events and " + (body.gmailTasks ?? 0) + " Gmail tasks imported." });
     } catch {
-      setNotice({ kind: "error", text: "Google could not be reached. Check your connection and try again." });
+      updateNotice({ kind: "error", text: "Google could not be reached. Check your connection and try again." });
     } finally {
       setBusy(false);
+      router.refresh();
     }
   }
+
+  const canvasStatus = canvasConnected
+    ? { label: "Connected", icon: CheckCircle2, className: "bg-[#e6f2f0] text-teal" }
+    : canvasConnection?.status === "error"
+      ? { label: "Needs attention", icon: TriangleAlert, className: "bg-[#fff0eb] text-[#a94712]" }
+      : { label: "Not connected", icon: Link2, className: "bg-[#eef3f2] text-slate-700" };
+  const CanvasStatusIcon = canvasStatus.icon;
 
   const googleStatus = googleConnected
     ? { label: "Connected", icon: CheckCircle2, className: "bg-[#dff2ed] text-[#075e60]" }
@@ -111,19 +142,19 @@ export function IntegrationsPanel({ initialGoogleConnection }: { initialGoogleCo
           {googleConnected && googleConnection?.last_synced_at && <p className="mt-3 text-sm font-semibold text-[#bfe0d8]">Last synced {new Date(googleConnection.last_synced_at).toLocaleString()}.</p>}
           {googleConnection?.status === "error" && googleConnection.error_message && <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]">{googleConnection.error_message}</p>}
           <div className="mt-7 flex flex-wrap gap-3">
-            <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnected ? "Reconnect Google" : "Connect Google"}</a>
+            <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnection ? "Reconnect Google" : "Connect Google"}</a>
             <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/25 px-4 py-2 font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !googleConnected} onClick={() => void syncGoogle()} type="button"><RefreshCw className="size-4" aria-hidden="true" />{busy ? "Syncing…" : "Sync now"}</button>
           </div>
         </article>
 
         <article className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
           <span className="grid size-11 place-items-center rounded-xl bg-[#f7ebe3] text-action"><Cloud className="size-5" aria-hidden="true" /></span>
-          <h3 className="mt-5 text-xl font-black">Canvas</h3>
-          <p className="mt-2 max-w-xl leading-7 text-slate-700">Your token is encrypted before it is stored. Active courses are matched to your selected term and assignments become useful tasks.</p>
+          <div className="mt-5 flex flex-wrap items-center gap-3"><h3 className="text-xl font-black">Canvas</h3><span className={"inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold " + canvasStatus.className}><CanvasStatusIcon className="size-3.5" aria-hidden="true" />{canvasStatus.label}</span></div>
+          <p className="mt-2 max-w-xl leading-7 text-slate-700">{canvasHost ? "Connected securely to " + canvasHost + ". " : ""}Your token is encrypted before it is stored and is never shown again. Active courses are matched to your selected term and assignments become useful tasks.</p>{canvasConnected && canvasConnection?.last_synced_at ? <p className="mt-3 text-sm font-semibold text-teal">Last checked {new Date(canvasConnection.last_synced_at).toLocaleString()}.</p> : null}{canvasConnection?.status === "error" && canvasConnection.error_message ? <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]">{canvasConnection.error_message}</p> : null}
           <form className="mt-5 grid gap-3 sm:grid-cols-2" onSubmit={(event) => void canvas("connect", event)}>
-            <label className="text-sm font-bold text-ink">Canvas base URL<input autoCapitalize="none" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink placeholder:text-slate-600 focus:border-teal" inputMode="url" onChange={(event) => setCanvasUrl(event.target.value)} placeholder="https://canvas.example.edu" required spellCheck={false} type="url" value={canvasUrl} /></label>
-            <label className="text-sm font-bold text-ink">Personal API token<input autoCapitalize="none" autoComplete="off" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" maxLength={4096} onChange={(event) => setCanvasToken(event.target.value)} required spellCheck={false} type="password" value={canvasToken} /></label>
-            <div className="flex flex-wrap gap-3 sm:col-span-2"><button className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action px-4 py-2 font-bold text-white transition hover:bg-[#8d3909] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy} type="submit">Connect Canvas</button><button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy} onClick={() => void canvas("sync")} type="button"><RefreshCw className="size-4" aria-hidden="true" />Sync assignments</button></div>
+            <label className="text-sm font-bold text-ink">Canvas base URL{canvasConnection ? " (enter only to replace)" : ""}<input autoCapitalize="none" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink placeholder:text-slate-600 focus:border-teal" inputMode="url" onChange={(event) => setCanvasUrl(event.target.value)} placeholder="https://canvas.example.edu" required spellCheck={false} type="url" value={canvasUrl} /></label>
+            <label className="text-sm font-bold text-ink">Personal API token{canvasConnection ? " (enter only to replace)" : ""}<input autoCapitalize="none" autoComplete="off" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" maxLength={4096} onChange={(event) => setCanvasToken(event.target.value)} required spellCheck={false} type="password" value={canvasToken} /></label>
+            <div className="flex flex-wrap gap-3 sm:col-span-2"><button className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action px-4 py-2 font-bold text-white transition hover:bg-[#8d3909] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy} type="submit">{canvasConnection ? "Reconnect Canvas" : "Connect Canvas"}</button><button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !canvasConnected} onClick={() => void canvas("sync")} type="button"><RefreshCw className="size-4" aria-hidden="true" />Sync assignments</button></div>
           </form>
         </article>
       </div>
