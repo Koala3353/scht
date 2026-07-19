@@ -6,12 +6,17 @@ export type TaskSyncState = 'pending' | 'conflict' | 'rejected' | 'synced';
 export interface TaskView extends TaskInput {
   id: string;
   updatedAt: string;
+  /** The integration or workflow that created the task. */
+  source: string;
+  sourceId: string | null;
 }
 
 export interface CachedTask extends TaskView {
   userId: string;
   syncState: TaskSyncState;
   syncError?: string;
+  /** Canonical server state retained with a conflict for an explicit resolution. */
+  canonicalTask?: TaskView;
 }
 
 export interface TaskMutation {
@@ -36,6 +41,8 @@ export type TaskMutationInput = Pick<
 
 export interface RejectedTaskMutation {
   id: string;
+  /** The affected task, which is deliberately distinct from the mutation id. */
+  taskId?: string;
   reason: string;
   task?: TaskView;
   syncState: Extract<TaskSyncState, 'conflict' | 'rejected'>;
@@ -50,4 +57,6 @@ export interface TaskSyncResponse {
   accepted: AcceptedTaskMutation[];
   rejected: RejectedTaskMutation[];
   nextRetryAt?: number;
+  /** A transport failure deferred pending mutations rather than receiving a server response. */
+  networkError?: boolean;
 }

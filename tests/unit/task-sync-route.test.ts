@@ -38,6 +38,8 @@ const row = {
   effort_minutes: 45,
   completed_at: null,
   updated_at: updatedAt,
+  source: 'canvas',
+  source_id: 'course:assignment',
 };
 
 function request(mutations: unknown) {
@@ -95,7 +97,7 @@ describe('POST /api/sync/tasks', () => {
     const response = await POST(request([mutation({ payload: { ...mutation().payload, user_id: '6ed78831-33e5-4af2-99e0-5142e0c0b84c' } })]));
 
     expect(await response.json()).toEqual({
-      accepted: [{ id: 'mutation-1', task: expect.objectContaining({ id: taskId, description: 'Use the lecture notes.' }) }],
+      accepted: [{ id: 'mutation-1', task: expect.objectContaining({ id: taskId, description: 'Use the lecture notes.', source: 'canvas', sourceId: 'course:assignment' }) }],
       rejected: [],
     });
     expect(mocks.insert).toHaveBeenCalledWith(
@@ -140,6 +142,7 @@ describe('POST /api/sync/tasks', () => {
         id: 'mutation-1',
         reason: 'This task changed on another device.',
         syncState: 'conflict',
+        taskId,
         task: expect.objectContaining({ id: taskId, updatedAt }),
       }],
     });

@@ -5,7 +5,7 @@ import { ArrowRight, CheckCircle2, Cloud, Plus } from "lucide-react";
 
 import { Agenda, selectAgendaTasks } from "@/components/today/agenda";
 import { FocusCard, chooseFocusTask } from "@/components/today/focus-card";
-import { mergeTaskSnapshot } from "@/components/tasks/task-types";
+import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "@/components/tasks/task-types";
 import { taskDb } from "@/lib/sync/db";
 import { enqueueTaskMutation, flushTaskOutbox, retryTaskOutbox } from "@/lib/sync/outbox";
 import type {
@@ -60,7 +60,9 @@ export function TodayWorkspace({
 
   async function refreshTasks() {
     const cachedTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
-    setTasks(selectedTermId ? cachedTasks.filter((task) => task.termId === selectedTermId) : cachedTasks);
+    const visibleTasks = selectedTermId ? cachedTasks.filter((task) => task.termId === selectedTermId) : cachedTasks;
+    setTasks(visibleTasks);
+    return visibleTasks;
   }
 
   function scheduleRetry(nextRetryAt?: number) {
@@ -78,23 +80,42 @@ export function TodayWorkspace({
     try {
       const response = await flushTaskOutbox(userId, postTaskMutations);
       await taskDb.transaction("rw", taskDb.tasks, async () => {
+        const pendingMutations = (await taskDb.outbox.where("userId").equals(userId).toArray())
+          .filter((mutation) => mutation.syncState === "pending");
         await Promise.all(
-          response.accepted.map(({ task }) =>
-            taskDb.tasks.put({ ...task, userId, syncState: "synced" }),
-          ),
+          response.accepted.map(async ({ task }) => {
+            const localTask = await taskDb.tasks.get(task.id);
+            if (shouldApplyAcceptedTask(localTask, task, pendingMutations)) {
+              await taskDb.tasks.put({ ...task, userId, syncState: "synced" });
+            }
+          }),
         );
         await Promise.all(
-          response.rejected.map(async ({ id, reason, syncState: rejectedState }) => {
-            const localTask = await taskDb.tasks.get(id);
+          response.rejected.map(async ({ id, taskId, task: canonicalTask, reason, syncState: rejectedState }) => {
+            // Sync responses identify a mutation; the task cache is keyed by task id.
+            const mutation = await taskDb.outbox.get(id);
+            const affectedTaskId = taskId ?? mutation?.payload.id;
+            if (!affectedTaskId) return;
+            const localTask = await taskDb.tasks.get(affectedTaskId);
             if (localTask?.userId === userId) {
-              await taskDb.tasks.update(id, { syncState: rejectedState, syncError: reason });
+              await taskDb.tasks.update(affectedTaskId, {
+                syncState: rejectedState,
+                syncError: reason,
+                ...(canonicalTask ? { canonicalTask } : {}),
+              });
             }
           }),
         );
       });
-      await refreshTasks();
+      const refreshedTasks = await refreshTasks();
       scheduleRetry(response.nextRetryAt);
-      setSyncState(response.rejected.length > 0 ? "Needs review" : "Synced");
+      setSyncState(
+        response.networkError
+          ? "Sync failed"
+          : refreshedTasks.some((task) => task.syncState === "conflict" || task.syncState === "rejected")
+            ? "Needs review"
+            : "Synced",
+      );
     } catch {
       setSyncState("Sync failed");
     }
@@ -174,6 +195,8 @@ export function TodayWorkspace({
       completedAt: null,
       updatedAt: now,
       syncState: "pending",
+      source: "manual",
+      sourceId: null,
     }, null);
     setTitle("");
   }
@@ -226,7 +249,7 @@ export function TodayWorkspace({
           <Cloud className="size-4" aria-hidden="true" />
           {syncState}
         </p>
-        {(syncState === "Needs review" || syncState === "Sync failed") && (
+        {syncState === "Sync failed" && (
           <button
             className="inline-flex min-h-11 w-fit items-center justify-center rounded-xl border border-action px-4 py-2 text-sm font-bold text-action transition hover:bg-[#f7ebe3]"
             onClick={() => void retrySynchronization()}
@@ -234,6 +257,11 @@ export function TodayWorkspace({
           >
             Retry sync
           </button>
+        )}
+        {syncState === "Needs review" && (
+          <p className="text-sm font-semibold text-action">
+            A task changed elsewhere. Review and edit it from its latest server version before syncing again.
+          </p>
         )}
       </header>
 

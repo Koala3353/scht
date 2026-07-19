@@ -28,18 +28,27 @@ type TaskRow = {
   effort_minutes: number | null;
   completed_at: string | null;
   updated_at: string;
+  source: string;
+  source_id: string | null;
 };
 
 const taskColumns =
-  'id,user_id,title,kind,due_at,priority,term_id,subject_id,project_id,weight_percent,notes,links,effort_minutes,completed_at,updated_at';
+  'id,user_id,title,kind,due_at,priority,term_id,subject_id,project_id,weight_percent,notes,links,effort_minutes,completed_at,updated_at,source,source_id';
 
 function rejection(
   id: unknown,
   reason: string,
   syncState: RejectedTaskMutation['syncState'] = 'rejected',
   task?: TaskView,
+  taskId?: string,
 ): RejectedTaskMutation {
-  return { id: typeof id === 'string' ? id : 'unknown', reason, syncState, ...(task ? { task } : {}) };
+  return {
+    id: typeof id === 'string' ? id : 'unknown',
+    reason,
+    syncState,
+    ...(task ? { task } : {}),
+    ...(taskId ? { taskId } : {}),
+  };
 }
 
 function toTaskRow(task: TaskInput, userId: string) {
@@ -77,6 +86,8 @@ function toTaskView(row: TaskRow): TaskView {
     effortMinutes: row.effort_minutes,
     completedAt: row.completed_at,
     updatedAt: row.updated_at,
+    source: row.source,
+    sourceId: row.source_id,
   };
 }
 
@@ -179,6 +190,7 @@ export async function POST(request: Request) {
         'This task changed on another device.',
         'conflict',
         canonical ? toTaskView(canonical as TaskRow) : undefined,
+        parsedTask.data.id,
       ),
     );
   }

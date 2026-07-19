@@ -1,4 +1,4 @@
-import type { CachedTask, TaskSyncState } from '@/lib/sync/types';
+import type { CachedTask, TaskMutation, TaskSyncState, TaskView } from '@/lib/sync/types';
 
 function timestamp(value: string): number {
   return new Date(value).getTime();
@@ -42,4 +42,16 @@ export function mergeTaskSnapshot(
 
 export function syncStateLabel(state: TaskSyncState): string {
   return state === 'conflict' || state === 'rejected' ? 'Needs review' : 'Synced';
+}
+
+/**
+ * An acknowledgement can arrive after another local edit was queued. In that
+ * case the cache remains authoritative until the later mutation is flushed.
+ */
+export function shouldApplyAcceptedTask(
+  localTask: CachedTask | undefined,
+  acceptedTask: TaskView,
+  pendingMutations: TaskMutation[],
+): boolean {
+  return !localTask || !pendingMutations.some((mutation) => mutation.payload.id === acceptedTask.id);
 }

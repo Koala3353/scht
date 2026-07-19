@@ -20,6 +20,8 @@ const currentHighWeightTask = {
   completedAt: null,
   updatedAt: "2026-07-18T08:00:00.000Z",
   syncState: "synced" as const,
+  source: "manual",
+  sourceId: null,
 };
 
 describe("Agenda", () => {
@@ -68,5 +70,11 @@ describe("Agenda", () => {
     );
 
     expect(tasks.map((task) => task.id)).toEqual(["early", "later"]);
+  });
+
+  it("disables completion for a task that needs conflict review", () => {
+    const { container } = render(<Agenda tasks={[{ ...currentHighWeightTask, syncState: "conflict" }]} onComplete={vi.fn()} />);
+
+    expect((container.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
   });
 });

@@ -54,6 +54,7 @@ export function Agenda({ tasks, onComplete }: AgendaProps) {
     <ol aria-label="Current term agenda" className="divide-y divide-slate-200">
       {tasks.map((task) => {
         const highImpact = (task.weightPercent ?? 0) > 0;
+        const needsReview = task.syncState === "conflict" || task.syncState === "rejected";
         return (
           <li
             className="grid grid-cols-[4.75rem_minmax(0,1fr)_2.75rem] items-start gap-3 py-4 first:pt-0 last:pb-0 sm:grid-cols-[6rem_minmax(0,1fr)_2.75rem]"
@@ -79,7 +80,8 @@ export function Agenda({ tasks, onComplete }: AgendaProps) {
             </div>
             <button
               aria-label={`Complete ${task.title}`}
-              className="grid size-11 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-teal hover:bg-[#e6f2f0] hover:text-teal"
+              className="grid size-11 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-teal hover:bg-[#e6f2f0] hover:text-teal disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={needsReview}
               onClick={() => onComplete(task)}
               type="button"
             >
