@@ -38,6 +38,21 @@ function refreshMessage(providers: Provider[]) {
   return `Refreshing ${providers.map(providerName).join(" and ")}…`;
 }
 
+function uniqueResults(results: ProviderResult[]) {
+  return results.filter(
+    (result, index) => results.findIndex(
+      (candidate) => candidate.message === result.message && candidate.tone === result.tone,
+    ) === index,
+  );
+}
+
+function refreshOutcome(results: ProviderResult[]) {
+  const warnings = results.filter((result) => result.tone === "warning").length;
+  return warnings
+    ? `Refresh complete with ${warnings} ${warnings === 1 ? "issue" : "issues"}.`
+    : "Refresh complete.";
+}
+
 async function responseJson(response: Response): Promise<unknown> {
   return response.json().catch(() => ({}));
 }
@@ -132,9 +147,9 @@ export function ProviderResync({ providers }: { providers: Provider[] }) {
     const responses = await Promise.all(
       selectedProviders.map((provider) => provider === "google" ? syncGoogle() : syncCanvas()),
     );
-    const settledResults = responses.flat();
+    const settledResults = uniqueResults(responses.flat());
     setResults(settledResults);
-    setAnnouncement(settledResults.map((result) => result.message).join(" "));
+    setAnnouncement(refreshOutcome(settledResults));
     setBusy(false);
     router.refresh();
   }, [busy, router, selectedProviders]);
@@ -161,13 +176,13 @@ export function ProviderResync({ providers }: { providers: Provider[] }) {
         <RefreshCw aria-hidden="true" className={busy ? "size-4 animate-spin" : "size-4"} />
         {buttonLabel}
       </button>
-      <div aria-live="polite" className="max-w-sm text-sm text-slate-600" id="provider-resync-status" role="status">
+      <div aria-live="polite" className="sr-only" id="provider-resync-status" role="status">
         {announcement || (selectedProviders.length ? "Ready to refresh saved connections." : "Not connected")}
       </div>
       {results.length > 0 ? (
-        <ul className="max-w-sm space-y-1 text-sm" aria-label="Provider refresh results">
+        <ul className="w-full max-w-sm space-y-1 text-left text-sm sm:text-right" aria-label="Provider refresh results">
           {results.map((result) => (
-            <li className={result.tone === "success" ? "text-teal" : "text-action"} key={result.id}>
+            <li className={"break-words " + (result.tone === "success" ? "text-teal" : "text-action")} key={result.id}>
               {result.message}
             </li>
           ))}

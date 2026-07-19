@@ -64,6 +64,20 @@ describe('ProviderResync', () => {
     expect((screen.getByRole('button', { name: 'Resync Google Calendar and Gmail and Canvas' }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it('shows a shared provider failure once instead of duplicating it for Calendar and Gmail', async () => {
+    const failure = 'Google authorization has expired. Reconnect Google and try again.';
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      calendar: { state: 'needs_reauth', imported: 0, message: failure },
+      gmail: { state: 'needs_reauth', imported: 0, message: failure },
+    })));
+
+    render(<ProviderResync providers={['google']} />);
+
+    await screen.findByText(failure);
+    expect(screen.getAllByText(failure)).toHaveLength(1);
+    expect(screen.getByText('Refresh complete with 1 issue.')).toBeTruthy();
+  });
+
   it('does not make provider requests without a saved connection', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

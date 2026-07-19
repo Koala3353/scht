@@ -9,6 +9,9 @@ h1,h2,h3 { text-wrap:balance; }
 button,a,input,select,textarea { min-height:var(--touch-target); }
 input,select,textarea { max-width:100%; }
 button,a { -webkit-tap-highlight-color:transparent; }
+button:not(:disabled), [role="button"]:not([aria-disabled="true"]), a[href] { cursor:pointer; transition:background-color .16s ease, border-color .16s ease, color .16s ease, filter .16s ease, transform .16s ease; }
+button:disabled, [role="button"][aria-disabled="true"] { cursor:not-allowed; }
+@media (hover:hover) { button:not(:disabled):hover, [role="button"]:not([aria-disabled="true"]):hover, a[href]:hover { filter:brightness(.97); } }
 :focus-visible { outline:3px solid var(--teal); outline-offset:3px; }
 ::placeholder { color:#45556c; opacity:1; }
 html { scroll-behavior:smooth; }
