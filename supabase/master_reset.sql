@@ -298,7 +298,9 @@ create index tasks_user_term_due_at_idx on public.tasks (user_id, term_id, due_a
 create index tasks_user_completed_at_idx on public.tasks (user_id, completed_at);
 create index tasks_user_updated_at_idx on public.tasks (user_id, updated_at);
 create index tasks_user_project_idx on public.tasks (user_id, project_id);
-create unique index tasks_user_source_source_id_key on public.tasks (user_id, source, source_id) where source_id is not null;
+-- NULL source IDs remain distinct, while provider identities support the
+-- non-partial ON CONFLICT target used by Gmail and Canvas imports.
+create unique index tasks_user_source_source_id_key on public.tasks (user_id, source, source_id);
 create index syllabi_user_subject_created_at_idx on public.syllabi (user_id, subject_id, created_at desc);
 create index grade_categories_user_subject_idx on public.grade_categories (user_id, subject_id);
 create index assessment_results_user_subject_idx on public.assessment_results (user_id, subject_id);

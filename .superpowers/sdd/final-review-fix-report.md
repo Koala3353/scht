@@ -56,3 +56,20 @@ Fixed the three Important findings in the final review only: shared local-first 
 - `npm run lint` — passed.
 - `npm run build` — passed.
 - `npm run test:e2e` — 4 fixture-gated tests skipped; no failures.
+
+## Third final-review fix wave
+
+### RED evidence
+
+- The original provider identity was a partial unique index (`WHERE source_id IS NOT NULL`), which PostgreSQL cannot use to infer the non-partial `user_id,source,source_id` conflict target used by Gmail and Canvas imports.
+
+### GREEN implementation and regressions
+
+- Added `0013_task_source_identity.sql`, which replaces the legacy partial index with a non-partial unique index on `(user_id, source, source_id)`. Standard PostgreSQL NULL-distinct semantics retain multiple manual tasks whose `source_id` is NULL.
+- Made the matching non-partial identity index in `master_reset.sql`. Gmail/Canvas retain atomic conflict-ignore imports and user-context preservation.
+- Added static integration coverage for migration/reset identity shape and both provider route conflict targets.
+
+### Third-wave verification
+
+- Focused schema/provider checks: 23 tests passed.
+- No live database, reset SQL, or external database command was run. The credential-gated live database integration remains skipped when its external test environment is absent.
