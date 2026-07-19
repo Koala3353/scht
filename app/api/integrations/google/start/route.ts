@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL('/?error=authentication-required', request.url));
 
-  const callbackUrl = new URL("/api/integrations/google/callback", process.env.NEXT_PUBLIC_APP_URL ?? request.url);
+  const callbackUrl = new URL("/api/integrations/google/callback", request.nextUrl.origin);
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
