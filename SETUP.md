@@ -191,3 +191,32 @@ Create a time-driven trigger for `dispatchSchtReminders` every 15 minutes and gr
 ### Vercel
 
 Set every variable above in Vercel for the environments that use the corresponding feature. Add the Vercel production URL and `/auth/callback` redirect URL to Supabase Authentication URL Configuration. The Apps Script endpoint must point to the deployed production domain, never `localhost`.
+
+## 10. `.env.local` reference
+
+Copy `.env.example` to `.env.local`, then configure every entry as follows. Keep `.env.local` out of Git.
+
+| Variable | What to enter | Required for |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL, such as `https://<project-ref>.supabase.co`. | Always. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The public `sb_publishable_...` key from Supabase API Keys. Use this **or** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. | Always. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same public key, using Supabase’s current variable name. Leave `NEXT_PUBLIC_SUPABASE_ANON_KEY` empty when using this form. | Always, as an alternative to the anonymous-key name. |
+| `SUPABASE_SERVICE_ROLE_KEY` | The server-side `service_role` key from Supabase API Keys. Never expose it to the browser or commit it. | Owner exports, reminder dispatch, and local demo login. |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3001` locally; the exact Vercel URL in each deployed environment. | Auth redirects and provider callbacks. |
+| `INTEGRATION_ENCRYPTION_KEY` | A base64-encoded 32-byte random key. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. | Canvas and Google token encryption. |
+| `GOOGLE_OAUTH_CLIENT_ID` | The Web OAuth client ID from Google Cloud—the same client configured in Supabase’s Google provider. | Refreshing Google Calendar/Gmail connections. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | The matching Web OAuth client secret from Google Cloud. | Refreshing Google Calendar/Gmail connections. |
+| `REMINDER_DISPATCH_TOKEN` | A long random shared secret, for example `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Configure the same value as Apps Script’s `SCHT_REMINDER_TOKEN`. | Protected Apps Script reminder delivery. |
+| `HACK_CLUB_AI_BASE_URL` | Leave as `https://ai.hackclub.com/v1` unless Hack Club provides a replacement endpoint. | Hack Club AI provider. |
+| `DEMO_AUTH_ENABLED` | Set to `true` only in local `.env.local` when you want the demo sign-in. Leave `false` in Vercel and every shared environment. | Local demo account only. |
+
+### Local demo sign-in
+
+For a real, locally authenticated preview, set these values in `.env.local` and restart `npm run dev -- --port 3001`:
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=<your Supabase service_role key>
+DEMO_AUTH_ENABLED=true
+```
+
+On the first screen, type exactly `adminadminadmin` in the email field and submit. Scht creates or reuses `adminadminadmin@demo.scht.local` as a standard member, seeds a small term with two subjects and two tasks if needed, and follows Supabase’s one-time login flow. The endpoint runs only when `NODE_ENV=development` and the explicit flag above is `true`; it returns 404 in production builds even if the flag is accidentally set. Owner-admin privileges remain restricted to your normal invite-based account.
