@@ -45,7 +45,7 @@ Apply every SQL migration in `supabase/migrations`—including `0008_reminder_em
 ## Production checklist
 
 1. Set the Vercel production domain to `https://scht-admu.vercel.app`.
-2. Set Supabase Site URL and redirect URL to `https://scht-admu.vercel.app/auth/callback`.
+2. Set Supabase Site URL to `https://scht-admu.vercel.app` and allow both `https://scht-admu.vercel.app/auth/callback` and `https://scht-admu.vercel.app/api/integrations/google/callback` as redirect URLs.
 3. Configure the Google OAuth callback as `https://bethierxqssasenuzhal.supabase.co/auth/v1/callback` and enable Calendar/Gmail APIs.
 4. Add all server and public environment values in Vercel, then redeploy.
 5. Deploy the Apps Script companion if reminder email is enabled.
