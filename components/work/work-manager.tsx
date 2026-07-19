@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 type Project = { id: string; name: string; status: "active" | "archived" };
 type Task = { id: string; title: string; projectId: string | null; dueAt: string | null };
 
-export function WorkManager({ initialProjects, tasks }: { initialProjects: Project[]; tasks: Task[] }) {
+export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { initialProjects: Project[]; tasks: Task[]; onTaskProjectChange?: (taskId: string, projectId: string | null) => void }) {
   const router = useRouter();
   const { toast } = useToast();
   const [projects, setProjects] = useState(initialProjects);
@@ -46,7 +46,7 @@ export function WorkManager({ initialProjects, tasks }: { initialProjects: Proje
 
   async function assign(taskId: string, projectId: string) {
     setBusy(true); setNotice("");
-    try { await request("PATCH", { taskId, projectId: projectId || null }); setNotice("Task project updated."); router.refresh(); }
+    try { const nextProjectId = projectId || null; await request("PATCH", { taskId, projectId: nextProjectId }); onTaskProjectChange?.(taskId, nextProjectId); setNotice("Task project updated."); router.refresh(); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Could not update the task."); }
     setBusy(false);
   }

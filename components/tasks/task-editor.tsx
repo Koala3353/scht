@@ -11,6 +11,8 @@ export type TaskProject = { id: string; label: string; status: "active" | "archi
 export type TaskEditorProps = {
   task: CachedTask;
   currentTermId?: string | null;
+  /** Only fresh manual capture should inherit the selected current term. */
+  defaultToCurrentTerm?: boolean;
   terms: TaskTerm[];
   subjects: TaskSubject[];
   projects: TaskProject[];
@@ -33,6 +35,7 @@ function nullable(value: string) {
 export function TaskEditor({
   task,
   currentTermId = null,
+  defaultToCurrentTerm = false,
   terms,
   subjects,
   projects,
@@ -40,14 +43,18 @@ export function TaskEditor({
   onCancel,
   submitLabel = "Save task",
 }: TaskEditorProps) {
-  const [draft, setDraft] = useState(() => ({ ...task, termId: task.termId ?? currentTermId }));
+  const [draft, setDraft] = useState(task);
+  const [usesCurrentTermDefault, setUsesCurrentTermDefault] = useState(
+    () => defaultToCurrentTerm && task.termId === null && currentTermId !== null,
+  );
   const [noDeadline, setNoDeadline] = useState(!task.dueAt);
   const [linksText, setLinksText] = useState(task.links.join("\n"));
   const [saving, setSaving] = useState(false);
 
+  const selectedTermId = usesCurrentTermDefault ? currentTermId : draft.termId;
   const visibleSubjects = useMemo(
-    () => subjects.filter((subject) => subject.termId === draft.termId),
-    [draft.termId, subjects],
+    () => subjects.filter((subject) => subject.termId === selectedTermId),
+    [selectedTermId, subjects],
   );
   const activeProjects = projects.filter((project) => project.status === "active" || project.id === draft.projectId);
 
@@ -61,6 +68,7 @@ export function TaskEditor({
     const dueAt = noDeadline || !draft.dueAt ? null : new Date(draft.dueAt).toISOString();
     const nextTask: CachedTask = {
       ...draft,
+      termId: selectedTermId,
       title: draft.title.trim(),
       dueAt,
       description: draft.description.trim(),
@@ -117,7 +125,7 @@ export function TaskEditor({
       </label>
       <label className="grid gap-1 text-sm font-bold text-ink" htmlFor="task-term">
         Term
-        <select className="rounded-xl border border-slate-300 bg-white px-3 py-2" id="task-term" onChange={(event) => { const termId = nullable(event.target.value); update("termId", termId); if (!subjects.some((subject) => subject.id === draft.subjectId && subject.termId === termId)) update("subjectId", null); }} value={draft.termId ?? currentTermId ?? ""}><option value="">No term</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.label}</option>)}</select>
+        <select className="rounded-xl border border-slate-300 bg-white px-3 py-2" id="task-term" onChange={(event) => { const termId = nullable(event.target.value); setUsesCurrentTermDefault(false); update("termId", termId); if (!subjects.some((subject) => subject.id === draft.subjectId && subject.termId === termId)) update("subjectId", null); }} value={selectedTermId ?? ""}><option value="">No term</option>{terms.map((term) => <option key={term.id} value={term.id}>{term.label}</option>)}</select>
       </label>
       <label className="grid gap-1 text-sm font-bold text-ink" htmlFor="task-subject">
         Subject

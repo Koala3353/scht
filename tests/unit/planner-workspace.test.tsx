@@ -2,13 +2,16 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../components/work/work-manager", () => ({ WorkManager: () => null }));
+vi.mock("../../components/work/work-manager", () => ({
+  WorkManager: ({ tasks, onTaskProjectChange }: { tasks: Array<{ id: string }>; onTaskProjectChange?: (taskId: string, projectId: string | null) => void }) => <button onClick={() => onTaskProjectChange?.(tasks[0]?.id ?? "", projectId)} type="button">Assign task to Capstone</button>,
+}));
 
 import { PlannerWorkspace } from "../../components/planner/planner-workspace";
 import type { CachedTask } from "../../lib/sync/types";
 
 const userId = "0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f";
 const termId = "f8e5cb4d-2dd4-4d63-a9d1-5af4c3b1d7f0";
+const projectId = "7b95f593-b58f-4550-a0ba-4c824e7e343a";
 const task: CachedTask = {
   id: "f11c73a2-24b7-40ee-88fd-d7bf9a203420",
   userId,
@@ -56,5 +59,17 @@ describe("PlannerWorkspace saves", () => {
 
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("This task changed on another device."));
     expect(screen.getByRole("button", { name: "Retry saved change" })).not.toBeNull();
+  });
+
+  it("updates task rows and project filters immediately after direct project assignment", async () => {
+    render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
+    const user = userEvent.setup();
+
+    await user.selectOptions(screen.getByLabelText("Project"), projectId);
+    expect(screen.queryByText("Save failure task")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Assign task to Capstone" }));
+
+    expect(screen.getByText("Save failure task")).not.toBeNull();
+    expect(screen.getAllByText("Capstone").length).toBeGreaterThan(1);
   });
 });

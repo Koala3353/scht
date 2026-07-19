@@ -46,7 +46,7 @@ afterEach(cleanup);
 describe("shared task workspace", () => {
   it("captures the complete task record from labelled controls", async () => {
     const onSave = vi.fn();
-    render(<TaskEditor {...context} currentTermId={termId} onSave={onSave} task={task({ termId: null })} />);
+    render(<TaskEditor {...context} currentTermId={termId} defaultToCurrentTerm onSave={onSave} task={task({ termId: null })} />);
     const user = userEvent.setup();
 
     expect(screen.getByRole("option", { name: "MATH 121 · Quantitative reasoning" })).not.toBeNull();
@@ -118,5 +118,17 @@ describe("shared task workspace", () => {
 
     expect(relativeDue("2026-07-20T12:00:00.000Z")).toContain("Tomorrow");
     vi.useRealTimers();
+  });
+
+  it("preserves an explicit No term selection when a current term is available", async () => {
+    const onSave = vi.fn();
+    render(<TaskEditor {...context} currentTermId={termId} defaultToCurrentTerm onSave={onSave} task={task({ termId: null })} />);
+    const user = userEvent.setup();
+
+    await user.selectOptions(screen.getByLabelText("Term"), "");
+    expect((screen.getByLabelText("Term") as HTMLSelectElement).value).toBe("");
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ termId: null, subjectId: null }), "2026-07-19T10:00:00.000Z");
   });
 });
