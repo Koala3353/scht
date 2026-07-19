@@ -78,6 +78,7 @@ supabase/migrations/0007_academic_scale_and_subject_units.sql
 supabase/migrations/0008_reminder_email_digest.sql
 supabase/migrations/0009_projects_and_daily_digests.sql
 supabase/migrations/0010_digest_cadence.sql
+supabase/migrations/0011_ai_connected_data_privacy.sql
 ```
 
 They create the invite-only workspace, row-level security policies, subjects and QPI/GPA records, task sync, encrypted integration storage, syllabi, reminders, and audit log. Apply migrations before deploying; the app will not work correctly with only a subset.
@@ -154,13 +155,17 @@ Users provide their own key in Settings → **Encrypted AI key vault**. The key 
 
 AI proposes tasks from planning text. It cannot write planner data until the user reviews and explicitly applies the proposal. Never put individual users’ AI keys in Vercel environment variables.
 
-## 9. Enable QPI/GPA, subjects, and syllabi
+## 9. Configure AI data privacy
+
+AI only receives the text a student explicitly submits by default. In **Settings → AI vault**, leave **Allow connected data in a future AI request** off unless the student expressly wants to use imported Calendar or Gmail context. Turning it on does not send anything automatically; a future connected-data AI action must still be separately initiated and reviewed.
+
+## 10. Enable QPI/GPA, subjects, and syllabi
 
 After migration `0007`, Scht defaults to **Ateneo QPI**. Add each subject’s units on the Subjects page, enter approved assessment categories and scores, and Scht calculates a units-weighted QPI. In Settings, select **4.0 GPA** to use the alternative GPA scale.
 
 For a syllabus, upload it from the subject card. Text files receive candidate grade-weight extraction; PDF and DOC/DOCX files are stored but currently need manual category entry. Review every category, ensure weights total exactly 100%, and approve them before entering scores. Always defer to the school’s official and current grading policy; the built-in QPI mapping is an estimate.
 
-## 10. Deploy Apps Script reminders
+## 11. Deploy Apps Script reminders
 
 Scht’s reminder worker is [apps-script/reminders.gs](apps-script/reminders.gs). It calls the protected Vercel route, sends a responsive HTML email from the script owner’s Google account, and acknowledges each job. Scheduled task reminders and optional email updates use the student’s chosen 1, 3, 7, or 14-day outlook. Students can choose a concise daily update or a genuine once-weekly update on a selected weekday; the timeline combines only data already imported into Scht: Google Calendar events, Canvas deadlines, Gmail follow-ups, and due-dated Scht tasks.
 
@@ -182,7 +187,7 @@ Scht’s reminder worker is [apps-script/reminders.gs](apps-script/reminders.gs)
 
 The Apps Script project never receives Google OAuth, Canvas, or Supabase credentials; it only needs the protected endpoint and `REMINDER_DISPATCH_TOKEN`. The dispatch route needs both `SUPABASE_SERVICE_ROLE_KEY` and `REMINDER_DISPATCH_TOKEN`; the latter is checked on every request. Do not expose either token in client-side code or a public Apps Script URL.
 
-## 11. Add accounts from the owner dashboard
+## 12. Add accounts from the owner dashboard
 
 After the first owner signs in, open **Owner Admin** → **Add an account**.
 
@@ -199,7 +204,7 @@ https://console.cloud.google.com/auth/audience?project=scht-502902
 
 The often-shared `/auth/clients/create` link is for creating the OAuth client once; it does not add a person to the OAuth test audience.
 
-## 12. Deploy with GitHub and Vercel
+## 13. Deploy with GitHub and Vercel
 
 The repository is already connected to GitHub at [Koala3353/scht](https://github.com/Koala3353/scht) and its Vercel project is `scht-admu`.
 
@@ -229,7 +234,7 @@ vercel --prod
 
 Avoid changing an old Vercel alias by editing code. A `404: NOT_FOUND` from `scht-kappa.vercel.app` means that host is not owned by this project; use the active project domain in Vercel → Settings → Domains, then update Supabase and `NEXT_PUBLIC_APP_URL` to match it.
 
-## 13. Verify the production deployment
+## 14. Verify the production deployment
 
 Run these checks before and after deployment:
 
@@ -249,7 +254,7 @@ Then verify in the deployed app:
 5. Add a reminder and confirm the Apps Script sends exactly one email.
 6. As an owner, add a test account and confirm the Google Test users link contains the expected project ID.
 
-## 14. Troubleshooting
+## 15. Troubleshooting
 
 | Symptom                                                       | Fix                                                                                                                                                                                   |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -261,7 +266,7 @@ Then verify in the deployed app:
 | Owner export or seeded local demo errors about a service key. | Add the server-only `SUPABASE_SERVICE_ROLE_KEY`; never expose it in `NEXT_PUBLIC_*`.                                                                                                  |
 | A Vercel short URL returns `404: NOT_FOUND`.                  | Use the active `scht-admu` project domain shown in Vercel, not the retired `scht-kappa.vercel.app` alias.                                                                                  |
 
-## 15. Security checklist
+## 16. Security checklist
 
 - Keep `.env.local`, Vercel secret values, Google client secrets, service-role keys, reminder tokens, Canvas tokens, and personal AI keys out of Git.
 - Use separate Google/Supabase/Vercel projects for testing and production when possible.

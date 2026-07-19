@@ -22,12 +22,14 @@ function fromBytea(value: string) {
 
 const sessionVaultKey = "scht-unlocked-ai-keys";
 
-export function AiVaultPanel() {
+export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boolean }) {
   const [provider, setProvider] = useState<"openai" | "hackclub">("openai");
   const [apiKey, setApiKey] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [connectedDataAllowed, setConnectedDataAllowed] = useState(connectedDataOptIn);
+  const [privacyBusy, setPrivacyBusy] = useState(false);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,6 +78,24 @@ export function AiVaultPanel() {
       );
     }
     setBusy(false);
+  }
+
+  async function saveConnectedDataPrivacy() {
+    setPrivacyBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/settings/ai-privacy", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectedDataOptIn: connectedDataAllowed }),
+      });
+      const body = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? "Could not save your AI privacy choice.");
+      setNotice(connectedDataAllowed ? "Connected-data AI use is opted in. Scht will still never send it automatically." : "Connected-data AI use is off. AI receives only text you enter.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not save your AI privacy choice.");
+    }
+    setPrivacyBusy(false);
   }
 
   async function verify() {
@@ -192,6 +212,16 @@ export function AiVaultPanel() {
               type="button"
             >
               Verify passphrase
+            </button>
+          </div>
+          <div className="rounded-xl border border-[#cfdde8] bg-[#f5f8fc] p-4 text-sm leading-6 text-slate-700 sm:col-span-2">
+            <label className="flex min-h-11 items-start gap-3 font-bold text-ink">
+              <input checked={connectedDataAllowed} className="mt-1 size-4 accent-[#075e60]" onChange={(event) => setConnectedDataAllowed(event.target.checked)} type="checkbox" />
+              <span>Allow connected data in a future AI request</span>
+            </label>
+            <p className="mt-2">I’m intentionally not sending Calendar/Gmail data into an external AI provider automatically; that should be an explicit opt-in privacy choice. Even when enabled, Scht will require a separate, visible action before any connected data is included.</p>
+            <button className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60" disabled={privacyBusy} onClick={() => void saveConnectedDataPrivacy()} type="button">
+              Save privacy choice
             </button>
           </div>
         </form>

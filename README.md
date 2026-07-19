@@ -40,7 +40,7 @@ At minimum, set these values in `.env.local` and in Vercel Production:
 
 Google sync also needs `INTEGRATION_ENCRYPTION_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, and `GOOGLE_OAUTH_CLIENT_SECRET`. Apps Script reminders also need `REMINDER_DISPATCH_TOKEN`. Never commit `.env.local` or expose server-only values with a `NEXT_PUBLIC_` prefix.
 
-Apply every SQL migration in `supabase/migrations`—including `0008_reminder_email_digest.sql`, `0009_projects_and_daily_digests.sql`, and `0010_digest_cadence.sql`—before inviting users. Full, copyable deployment instructions are in [SETUP.md](SETUP.md).
+Apply every SQL migration in `supabase/migrations`—including `0008_reminder_email_digest.sql`, `0009_projects_and_daily_digests.sql`, `0010_digest_cadence.sql`, and `0011_ai_connected_data_privacy.sql`—before inviting users. Full, copyable deployment instructions are in [SETUP.md](SETUP.md).
 
 ## Production checklist
 
