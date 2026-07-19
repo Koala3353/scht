@@ -9,7 +9,7 @@ Before doing anything, create and verify a Supabase database backup. Also export
 ## Required preparation
 
 1. Empty the `syllabi` bucket with **Storage → `syllabi` → Empty bucket** in the Supabase Dashboard, or with the Storage API using a service-role key. Do not run `DELETE FROM storage.objects` in SQL: Supabase blocks it because it would orphan the actual files. The reset query will stop safely if even one object remains.
-2. Choose a **new Auth email address** for the first owner. Auth users are preserved by the reset, so an email that already has an Auth account will not fire the signup trigger and cannot consume the bootstrap entry.
+2. Choose the email address for the first owner. It may be a new account or an existing Supabase Auth account.
 3. Open `supabase/master_reset.sql` locally. Replace the literal `REPLACE_WITH_OWNER_EMAIL@example.com` with that exact lowercase email address. Do not leave the placeholder in place.
 4. Review the complete file, especially the warning and `begin;`/`commit;` boundary. This script deletes data; it is not part of normal migration deployment.
 
@@ -20,7 +20,7 @@ Before doing anything, create and verify a Supabase database backup. Also export
 3. Paste the complete, edited contents of `supabase/master_reset.sql`.
 4. Recheck the owner email literal, project selection, and destructive warning.
 5. Run the query once. Do not run it through the app, a migration command, or an automated deploy step.
-6. Complete sign-up and then sign in with the exact bootstrap owner email. The `auth.users` signup trigger creates the profile as `owner_admin` and atomically deletes the private bootstrap row. No arbitrary first account is promoted.
+6. Sign in with the exact bootstrap owner email. The reset creates that account's `owner_admin` profile immediately if the Auth account already exists; otherwise, the `auth.users` signup trigger creates it at first sign-up. Either path atomically consumes the private bootstrap row. No arbitrary first account is promoted.
 7. As that owner, verify `/admin`, create invitations, and have members sign in through their invited addresses.
 
 ## Recovering retained Auth users

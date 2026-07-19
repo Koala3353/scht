@@ -39,7 +39,7 @@ create table private.bootstrap_owner (
   normalized_email text generated always as (lower(btrim(email))) stored unique,
   created_at timestamptz not null default timezone('utc', now())
 );
--- Replace this literal before running. Use an email that is not already in Auth.
+-- Replace this literal before running. It may belong to an existing Auth user.
 do $$
 declare
   owner_email text := 'REPLACE_WITH_OWNER_EMAIL@example.com';
@@ -362,6 +362,40 @@ begin
     ) on conflict (id) do nothing;
   end if;
   return new;
+end;
+$$;
+
+-- Recover the configured owner when Auth is preserved.
+-- A matching account may predate this reset, so its insert trigger will not run.
+do $$
+declare
+  existing_owner_id uuid;
+  existing_owner_display_name text;
+begin
+  select
+    existing_auth_user.id,
+    coalesce(
+      existing_auth_user.raw_user_meta_data ->> 'full_name',
+      existing_auth_user.raw_user_meta_data ->> 'name'
+    )
+  into existing_owner_id, existing_owner_display_name
+  from auth.users as existing_auth_user
+  join private.bootstrap_owner as bootstrap_owner
+    on bootstrap_owner.normalized_email = lower(btrim(existing_auth_user.email))
+  limit 1;
+
+  if existing_owner_id is not null then
+    insert into public.profiles (id, role, display_name)
+    values (
+      existing_owner_id,
+      'owner_admin'::public.profile_role,
+      existing_owner_display_name
+    )
+    on conflict (id) do nothing;
+
+    delete from private.bootstrap_owner
+    where singleton = true;
+  end if;
 end;
 $$;
 

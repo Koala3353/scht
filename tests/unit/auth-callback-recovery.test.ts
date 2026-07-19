@@ -44,4 +44,15 @@ describe("reset invite recovery contract", () => {
     );
     expect(reset).not.toContain('create policy "users insert own profile"');
   });
+
+  it("recovers the configured bootstrap owner when their Supabase Auth account already existed before a reset", () => {
+    const bootstrapRecovery = reset.slice(
+      reset.indexOf("-- Recover the configured owner when Auth is preserved."),
+      reset.indexOf("create or replace function public.prevent_profile_role_change()"),
+    );
+
+    expect(bootstrapRecovery).toContain("from auth.users as existing_auth_user");
+    expect(bootstrapRecovery).toContain("'owner_admin'::public.profile_role");
+    expect(bootstrapRecovery).toContain("delete from private.bootstrap_owner");
+  });
 });
