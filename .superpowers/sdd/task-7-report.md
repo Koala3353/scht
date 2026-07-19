@@ -41,3 +41,9 @@ Complete. The reset is a manual artifact only. No live SQL, Supabase CLI command
 - Reordered `/auth/callback` to invoke the recovery RPC before reading/rejecting a missing profile. Retained Auth users are recoverable by re-inviting their existing email; no new credentials are required.
 - Documented that recovery procedure in `supabase/MASTER_RESET.md` and extended static tests for callback ordering, atomic invite recovery, protected profile creation, required terminal `commit;`, and calendar writes without provider payloads.
 - **GREEN (follow-up):** focused schema/RLS/auth test suite passed (5 files, 14 passed, 2 intentionally skipped live-RLS checks); `npm run lint` and `npm run build` passed. No live SQL, Supabase CLI command, migration application, database reset, or data deletion was executed.
+
+## Final demo-seed remediation
+
+- The development-only demo seeder now upserts its fixed `owner_admin` profile before creating its first academic term, satisfying the reset schema's profile foreign key without weakening production invite-only behavior.
+- Added `tests/unit/demo-login-route.test.ts`, which mocks the privileged admin client and verifies the owner profile save precedes the term insert and the profile is later linked to the seeded term.
+- **GREEN (final):** focused demo/auth/schema/RLS suite passed (4 files, 11 passed, 2 intentionally skipped live-RLS checks); `npm run lint` and `npm run build` passed. No live SQL, Supabase CLI command, migration application, database reset, or data deletion was executed.
