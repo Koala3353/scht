@@ -41,7 +41,7 @@ function permissionName(service: string) {
 
 function classifiedError(service: string, status: number, payload: unknown, retryAfter: number | undefined) {
   const normalised = errorDetail(payload).toLowerCase();
-  if (status === 401) return new GoogleApiError("needs_reauth", `${service} authorization has expired. Reconnect Google and try again.`);
+  if (status === 401 || (status === 400 && normalised.includes("invalid_grant"))) return new GoogleApiError("needs_reauth", `${service} authorization has expired. Reconnect Google and try again.`);
   if (status === 403 && (normalised.includes("insufficient authentication scopes") || normalised.includes("insufficient permission") || normalised.includes("required authentication credential"))) {
     return new GoogleApiError("permission", `${service} permission is missing. Reconnect Google and approve the ${permissionName(service)} permission.`);
   }
@@ -94,7 +94,10 @@ export async function refreshGoogleCredential(credentials: GoogleCredential): Pr
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, grant_type: "refresh_token", refresh_token: credentials.refreshToken }),
   });
-  if (!response.ok) throw new GoogleApiError("needs_reauth", "Google authorization has expired. Reconnect Google and try again.");
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    throw classifiedError("Google authorization refresh", response.status, payload, retryAfterSeconds(response.headers.get("Retry-After")));
+  }
   const body: unknown = await response.json();
   const parsed = z.object({ access_token: z.string().min(1), expires_in: z.number().finite().nonnegative() }).safeParse(body);
   if (!parsed.success) throw new GoogleApiError("unknown", "Google could not be refreshed. Try again.");

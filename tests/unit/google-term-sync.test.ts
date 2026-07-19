@@ -32,7 +32,7 @@ describe("Google sync", () => {
       .mockResolvedValueOnce({ items: [] })
       .mockResolvedValueOnce({ messages: [{ id: "gmail-1" }] })
       .mockResolvedValueOnce({ id: "gmail-1", snippet: "Follow up", payload: { headers: [{ name: "Subject", value: "Review notes" }] } });
-    mocks.tasksUpsert.mockResolvedValue({ error: null });
+    mocks.tasksUpsert.mockReturnValue({ select: vi.fn(async () => ({ data: [{ id: "task-1" }], error: null })) });
     const profileQuery = { eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: { current_term_id: termId }, error: null })) })) };
     const connectionQuery = { eq: vi.fn() };
     connectionQuery.eq.mockReturnValue(connectionQuery);

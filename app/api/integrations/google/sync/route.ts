@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { decryptCredentials, encryptCredentials } from "../../../../../lib/integrations/credentials";
-import { formatRetryAfter, googleApi, googleErrorKind, googleErrorMessage, googleRetryAfter, refreshGoogleCredential, type GoogleCredential } from "../../../../../lib/integrations/google";
+import { formatRetryAfter, GoogleApiError, googleApi, googleErrorKind, googleErrorMessage, googleRetryAfter, refreshGoogleCredential, type GoogleCredential } from "../../../../../lib/integrations/google";
 import { createClient } from "../../../../../lib/supabase/server";
 
 export type ServiceState = "synced" | "degraded" | "needs_reauth";
@@ -36,6 +36,16 @@ function serviceFailure(error: unknown, service: "Google Calendar" | "Gmail", im
     };
   }
   return { state, imported, message: googleErrorMessage(error, service) };
+}
+
+function credentialFailure(error: unknown): GoogleSyncResult {
+  const kind = googleErrorKind(error);
+  const state: ServiceState = kind === "needs_reauth" || kind === "permission" ? "needs_reauth" : "degraded";
+  const message = kind === "rate_limited"
+    ? `Google authorization refresh is temporarily rate-limited. Try again after ${formatRetryAfter(googleRetryAfter(error))}.`
+    : googleErrorMessage(error, "Google authorization refresh");
+  const service = { state, imported: 0, message };
+  return { calendar: service, gmail: { ...service } };
 }
 
 function connectionSettings(value: unknown, result: GoogleSyncResult) {
@@ -92,17 +102,15 @@ export async function POST() {
   let credentials: GoogleCredential;
   try {
     const credentialResult = googleCredentialSchema.safeParse(decryptCredentials(bytes(connection.encrypted_credentials)));
-    if (!credentialResult.success) throw new Error("Google authorization has expired. Reconnect Google and try again.");
+    if (!credentialResult.success) throw new GoogleApiError("needs_reauth", "Google authorization has expired. Reconnect Google and try again.");
     credentials = credentialResult.data;
     if (credentials.expiresAt && new Date(credentials.expiresAt) <= new Date()) credentials = await refreshGoogleCredential(credentials);
   } catch (error) {
-    const result: GoogleSyncResult = {
-      calendar: serviceFailure(error, "Google Calendar"),
-      gmail: serviceFailure(error, "Gmail"),
-    };
+    const result = credentialFailure(error);
+    const needsReauth = result.calendar.state === "needs_reauth" || result.gmail.state === "needs_reauth";
     const { error: updateError } = await supabase
       .from("integration_connections")
-      .update({ status: "error", error_message: result.gmail.message, settings: connectionSettings(connection.settings, result) })
+      .update({ status: needsReauth ? "error" : "connected", error_message: needsReauth ? result.gmail.message : null, settings: connectionSettings(connection.settings, result) })
       .eq("id", connection.id);
     if (updateError) return NextResponse.json({ error: "Google connection needs to be reconnected, but the connection result could not be saved." }, { status: 502 });
     return NextResponse.json(result);
@@ -150,11 +158,17 @@ export async function POST() {
       }));
       if (tasks.length) {
         // Ignore existing source identities so a provider refresh never overwrites a user's task context or description.
-        const { error } = await supabase.from("tasks").upsert(tasks, { onConflict: "user_id,source,source_id", ignoreDuplicates: true });
+        const { data: savedTasks, error } = await supabase
+          .from("tasks")
+          .upsert(tasks, { onConflict: "user_id,source,source_id", ignoreDuplicates: true })
+          .select("id");
         if (error) throw new Error("Could not save Gmail review tasks.");
+        const imported = savedTasks?.length ?? 0;
+        if (metadata.failure) return serviceFailure(metadata.failure, "Gmail", imported);
+        return { state: "synced", imported, message: `${imported} Gmail tasks imported.` };
       }
-      if (metadata.failure) return serviceFailure(metadata.failure, "Gmail", tasks.length);
-      return { state: "synced", imported: tasks.length, message: `${tasks.length} Gmail tasks imported.` };
+      if (metadata.failure) return serviceFailure(metadata.failure, "Gmail");
+      return { state: "synced", imported: 0, message: "0 Gmail tasks imported." };
     } catch (error) {
       return serviceFailure(error, "Gmail");
     }
