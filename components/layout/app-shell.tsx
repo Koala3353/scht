@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
@@ -59,7 +60,8 @@ export function AppShell({
             className="flex min-h-12 items-center gap-3 rounded-xl px-3 text-2xl font-black tracking-[-0.06em] transition hover:bg-white/10 focus-visible:outline-white"
             href="/today"
           >
-            Scht<span className="text-[#f3b68b]">.</span>
+            <Image alt="" aria-hidden="true" height={32} priority src="/scht-mark.svg" width={32} />
+            <span>Scht<span className="text-[#f3b68b]">.</span></span>
             <span className="mt-1 text-xs font-semibold tracking-normal text-[#c7e6dd]">
               Student workspace
             </span>
@@ -118,10 +120,11 @@ export function AppShell({
       <div className="min-w-0 px-4 pb-28 pt-4 sm:px-6 sm:pb-24 lg:px-10 lg:pb-10 lg:pt-7 xl:px-12">
         <header className="mx-auto mb-8 flex max-w-7xl flex-col gap-4 border-b border-slate-200/90 pb-5 sm:flex-row sm:items-end sm:justify-between lg:mb-10">
           <a
-            className="text-2xl font-black tracking-[-0.06em] text-teal lg:hidden"
+            className="flex items-center gap-2 text-2xl font-black tracking-[-0.06em] text-teal lg:hidden"
             href="/today"
           >
-            Scht<span className="text-action">.</span>
+            <Image alt="" aria-hidden="true" height={32} priority src="/scht-mark.svg" width={32} />
+            <span>Scht<span className="text-action">.</span></span>
           </a>
           <div className="w-full sm:ml-auto sm:w-auto">{header}</div>
         </header>

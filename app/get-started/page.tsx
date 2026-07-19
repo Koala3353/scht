@@ -1,4 +1,5 @@
 import { ArrowLeft, BookOpenCheck, LockKeyhole, Sparkles } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { InviteAuthForm } from "@/components/auth/invite-auth-form";
 
@@ -18,7 +19,8 @@ export default function GetStartedPage() {
               Back to Scht
             </Link>
             <div className="my-auto max-w-lg py-16 lg:py-0">
-              <p className="text-xl font-black tracking-[-.06em]">
+              <p className="flex items-center gap-2 text-xl font-black tracking-[-.06em]">
+                <Image alt="" aria-hidden="true" height={32} priority src="/scht-mark.svg" width={32} />
                 Scht<span className="text-[#f3b68b]">.</span>
               </p>
               <h1 className="mt-8 text-5xl font-black leading-[.95] tracking-[-.055em] text-wrap-balance sm:text-6xl">

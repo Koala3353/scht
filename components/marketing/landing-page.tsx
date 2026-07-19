@@ -11,6 +11,7 @@ import {
   Sparkles,
   UploadCloud,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { ProductTour } from "@/components/marketing/product-tour";
 import { ConnectionFeatureSwitcher } from "@/components/marketing/connection-feature-switcher";
@@ -43,7 +44,8 @@ export function LandingPage() {
           aria-label="Primary"
           className="relative mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8 lg:px-10"
         >
-          <a className="text-xl font-black tracking-[-0.06em]" href="#top">
+          <a className="flex items-center gap-2 text-xl font-black tracking-[-0.06em]" href="#top">
+            <Image alt="" aria-hidden="true" height={30} priority src="/scht-mark.svg" width={30} />
             Scht<span className="text-[#f3b68b]">.</span>
           </a>
           <div className="hidden items-center gap-7 text-sm font-semibold text-teal-100 md:flex">
