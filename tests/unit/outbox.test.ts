@@ -119,7 +119,7 @@ describe('task mutation outbox', () => {
     });
   });
 
-  it('keeps an in-flight mutation and its newer edit retryable after a network failure', async () => {
+  it('serializes same-task retries while an older request is in flight', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
     await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'Older edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z' });
 
@@ -128,7 +128,8 @@ describe('task mutation outbox', () => {
     const requestStarted = new Promise<void>((resolve) => {
       markRequestStarted = resolve;
     });
-    const flush = flushTaskOutbox(userId, async () => {
+    const firstFlush = flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m1']);
       markRequestStarted();
       return new Promise((_, reject) => {
         rejectRequest = reject;
@@ -137,25 +138,32 @@ describe('task mutation outbox', () => {
 
     await requestStarted;
     await enqueueTaskMutation({ id: 'm2', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'Latest edit' }, baseUpdatedAt: '2026-07-19T10:00:00.000Z' });
+    const secondFetcher = vi.fn(async () => ({ accepted: [], rejected: [] }));
+    await flushTaskOutbox(userId, secondFetcher);
+    expect(secondFetcher).not.toHaveBeenCalled();
+
     rejectRequest(new Error('offline'));
+    const failure = await firstFlush;
+    expect(failure).toMatchObject({ networkError: true, nextRetryAt: 3_000 });
+    expect(outbox.get('m1')).toMatchObject({ attempts: 1, nextAttemptAt: 3_000, inFlight: false });
+    expect(outbox.get('m2')).toMatchObject({ payload: expect.objectContaining({ title: 'Latest edit' }), nextAttemptAt: 1_000, inFlight: false });
 
-    const response = await flush;
+    await flushTaskOutbox(userId, secondFetcher);
+    expect(secondFetcher).not.toHaveBeenCalled();
 
-    expect(outbox.get('m1')).toMatchObject({
-      userId,
-      payload: expect.objectContaining({ title: 'Older edit' }),
-      attempts: 1,
-      nextAttemptAt: 3_000,
-      inFlight: false,
+    now.mockReturnValue(3_000);
+    await flushTaskOutbox(userId, async () => ({
+      accepted: [{ id: 'm1', task: { id: taskId, title: 'Older edit', kind: 'school', priority: 'normal', description: '', links: [], updatedAt: '2026-07-19T11:00:00.000Z', source: 'manual', sourceId: null } }],
+      rejected: [],
+    }));
+    expect(outbox.get('m2')).toMatchObject({ baseUpdatedAt: '2026-07-19T11:00:00.000Z' });
+
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m2']);
+      return { accepted: [{ id: 'm2', task: { id: taskId, title: 'Latest edit', kind: 'school', priority: 'normal', description: '', links: [], updatedAt: '2026-07-19T12:00:00.000Z', source: 'manual', sourceId: null } }], rejected: [] };
     });
-    expect(outbox.get('m2')).toMatchObject({
-      userId,
-      payload: expect.objectContaining({ title: 'Latest edit' }),
-      baseUpdatedAt: '2026-07-19T09:00:00.000Z',
-      nextAttemptAt: 1_000,
-      inFlight: false,
-    });
-    expect(response).toMatchObject({ networkError: true, nextRetryAt: 1_000 });
+    expect(outbox.size).toBe(0);
     now.mockRestore();
   });
+
 });

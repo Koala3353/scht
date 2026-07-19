@@ -3,16 +3,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Cloud, Plus } from "lucide-react";
 
-import { Agenda, selectAgendaTasks } from "@/components/today/agenda";
-import { FocusCard, chooseFocusTask } from "@/components/today/focus-card";
-import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "@/components/tasks/task-types";
-import { taskDb } from "@/lib/sync/db";
-import { enqueueTaskMutation, flushTaskOutbox, retryTaskOutbox } from "@/lib/sync/outbox";
+import { Agenda, selectAgendaTasks } from "./agenda";
+import { FocusCard, chooseFocusTask } from "./focus-card";
+import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "../tasks/task-types";
+import { taskDb } from "../../lib/sync/db";
+import { discardTaskConflict, enqueueTaskMutation, flushTaskOutbox, resolveTaskConflict, retryRejectedTaskMutation, retryTaskOutbox } from "../../lib/sync/outbox";
 import type {
   CachedTask,
   TaskMutation,
   TaskSyncResponse,
-} from "@/lib/sync/types";
+} from "../../lib/sync/types";
 
 type SyncState = "Offline" | "Syncing" | "Synced" | "Needs review" | "Sync failed";
 
@@ -38,6 +38,10 @@ function newTaskId() {
   return crypto.randomUUID();
 }
 
+function retryDelayUntil(nextRetryAt: number) {
+  return Math.max(0, nextRetryAt - Date.now());
+}
+
 function syncTone(state: SyncState) {
   if (state === "Synced") return "bg-[#e6f2f0] text-teal";
   if (state === "Syncing") return "bg-[#e8eef9] text-[#345d9d]";
@@ -52,6 +56,7 @@ export function TodayWorkspace({
   const [tasks, setTasks] = useState<CachedTask[]>(initialTasks);
   const [syncState, setSyncState] = useState<SyncState>("Synced");
   const [title, setTitle] = useState("");
+  const [reviewConfirmation, setReviewConfirmation] = useState<string | null>(null);
   const retryTimer = useRef<number | undefined>(undefined);
   const agendaTasks = useMemo(
     () => (selectedTermId ? selectAgendaTasks(tasks, selectedTermId) : []),
@@ -68,7 +73,7 @@ export function TodayWorkspace({
   function scheduleRetry(nextRetryAt?: number) {
     if (retryTimer.current !== undefined) window.clearTimeout(retryTimer.current);
     if (!nextRetryAt || !navigator.onLine) return;
-    retryTimer.current = window.setTimeout(() => void synchronize(), Math.max(0, nextRetryAt - Date.now()));
+    retryTimer.current = window.setTimeout(() => void synchronize(), retryDelayUntil(nextRetryAt));
   }
 
   async function synchronize() {
@@ -123,6 +128,40 @@ export function TodayWorkspace({
 
   async function retrySynchronization() {
     await retryTaskOutbox(userId);
+    await synchronize();
+  }
+
+  async function reviewMutation(task: CachedTask, state: 'conflict' | 'rejected') {
+    return (await taskDb.outbox.where('userId').equals(userId).toArray())
+      .find((mutation) => mutation.payload.id === task.id && mutation.syncState === state);
+  }
+
+  async function keepLocalConflict(task: CachedTask) {
+    const mutation = await reviewMutation(task, 'conflict');
+    if (!mutation) return;
+    await resolveTaskConflict(userId, mutation.id, task);
+    await taskDb.tasks.update(task.id, { syncState: 'pending', syncError: undefined, canonicalTask: undefined });
+    setReviewConfirmation(null);
+    await refreshTasks();
+    await synchronize();
+  }
+
+  async function acceptServerConflict(task: CachedTask) {
+    const mutation = await reviewMutation(task, 'conflict');
+    if (!mutation) return;
+    const canonicalTask = await discardTaskConflict(userId, mutation.id);
+    await taskDb.tasks.put({ ...canonicalTask, userId, syncState: 'synced' });
+    setReviewConfirmation(null);
+    await refreshTasks();
+    await synchronize();
+  }
+
+  async function retryRejectedTask(task: CachedTask) {
+    const mutation = await reviewMutation(task, 'rejected');
+    if (!mutation) return;
+    await retryRejectedTaskMutation(userId, mutation.id);
+    await taskDb.tasks.update(task.id, { syncState: 'pending', syncError: undefined });
+    await refreshTasks();
     await synchronize();
   }
 
@@ -264,6 +303,42 @@ export function TodayWorkspace({
           </p>
         )}
       </header>
+
+      {tasks.filter((task) => task.syncState === 'conflict' || task.syncState === 'rejected').map((task) => (
+        <section aria-label={`Review sync issue for ${task.title}`} className="mt-6 rounded-[1.5rem] border border-action/30 bg-[#fff8f3] p-5 sm:p-6" key={task.id}>
+          <p className="text-sm font-semibold text-action">Sync review required</p>
+          <h2 className="mt-1 text-xl font-black tracking-tight">{task.title}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">{task.syncError ?? 'This saved change needs your decision before it can sync.'}</p>
+          {task.syncState === 'conflict' ? (
+            <div className="mt-4 space-y-3">
+              {reviewConfirmation === `keep:${task.id}` ? (
+                <div className="rounded-xl border border-action/30 bg-white p-4">
+                  <p className="text-sm font-semibold text-ink">Keep your local version and overwrite the latest server version?</p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white" onClick={() => void keepLocalConflict(task)} type="button">Confirm keeping my version</button>
+                    <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setReviewConfirmation(null)} type="button">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="min-h-11 rounded-xl border border-action px-4 py-2 text-sm font-bold text-action" onClick={() => setReviewConfirmation(`keep:${task.id}`)} type="button">Keep my version</button>
+              )}
+              {reviewConfirmation === `server:${task.id}` ? (
+                <div className="rounded-xl border border-action/30 bg-white p-4">
+                  <p className="text-sm font-semibold text-ink">Use the latest server version? Your local version will be removed from this task and retained in recovery history.</p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white" onClick={() => void acceptServerConflict(task)} type="button">Confirm using server version</button>
+                    <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setReviewConfirmation(null)} type="button">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setReviewConfirmation(`server:${task.id}`)} type="button">Use latest server version</button>
+              )}
+            </div>
+          ) : (
+            <button className="mt-4 min-h-11 rounded-xl border border-action px-4 py-2 text-sm font-bold text-action" onClick={() => void retryRejectedTask(task)} type="button">Retry saved change</button>
+          )}
+        </section>
+      ))}
 
       <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.8fr)]">
         <FocusCard task={focusTask} />

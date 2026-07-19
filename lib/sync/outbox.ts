@@ -1,6 +1,6 @@
 import { taskDb } from './db';
 import type { TaskInput } from '@/lib/validation/task';
-import type { TaskMutation, TaskMutationInput, TaskSyncResponse } from './types';
+import type { TaskMutation, TaskMutationInput, TaskSyncResponse, TaskView } from './types';
 
 export type TaskOutboxFetcher = (mutations: TaskMutation[]) => Promise<TaskSyncResponse>;
 
@@ -22,24 +22,17 @@ export async function enqueueTaskMutation(mutation: TaskMutationInput) {
     return queuedMutation;
   }
 
-  // Keep only the latest edit for a task that has not left this device. Its
-  // base version must remain the server version that the first edit used.
+  // Later edits must start from the same server version as the first pending
+  // edit. They stay as separate records: deleting an unacknowledged edit
+  // would make a transport failure lose user work.
   const pendingForTask = (await taskDb.outbox.where('userId').equals(mutation.userId).toArray())
     .filter((candidate) => candidate.syncState === 'pending' && candidate.payload.id === taskId)
     .sort((first, second) => first.createdAt - second.createdAt);
   const baseUpdatedAt = pendingForTask[0]?.baseUpdatedAt ?? queuedMutation.baseUpdatedAt;
 
-  await taskDb.transaction('rw', taskDb.outbox, async () => {
-    // A request may already own one of these mutations. It must remain until
-    // that request is accepted or rejected so a transport failure can defer it.
-    await Promise.all(
-      pendingForTask
-        .filter((candidate) => !candidate.inFlight)
-        .map((candidate) => taskDb.outbox.delete(candidate.id)),
-    );
-    await taskDb.outbox.put({ ...queuedMutation, baseUpdatedAt });
-  });
-  return queuedMutation;
+  const persistedMutation = { ...queuedMutation, baseUpdatedAt };
+  await taskDb.outbox.put(persistedMutation);
+  return persistedMutation;
 }
 
 function retryDelay(attempts: number) {
@@ -67,7 +60,12 @@ async function deferMutations(mutations: TaskMutation[]) {
 
 async function nextRetryAt(userId: string): Promise<number | undefined> {
   const mutations = await taskDb.outbox.where('userId').equals(userId).toArray();
-  const retryTimes = mutations
+  const earliestByTask = new Map<string, TaskMutation>();
+  for (const mutation of mutations.sort((first, second) => first.createdAt - second.createdAt)) {
+    const key = mutation.payload.id ?? mutation.id;
+    if (!earliestByTask.has(key)) earliestByTask.set(key, mutation);
+  }
+  const retryTimes = [...earliestByTask.values()]
     .filter((mutation) => mutation.syncState === 'pending')
     .map((mutation) => mutation.nextAttemptAt);
 
@@ -121,48 +119,71 @@ export async function resolveTaskConflict(
   });
 }
 
-async function coalesceDueMutations(mutations: TaskMutation[]): Promise<TaskMutation[]> {
-  const grouped = new Map<string, TaskMutation[]>();
-  for (const mutation of mutations) {
-    const key = mutation.payload.id ?? mutation.id;
-    const group = grouped.get(key) ?? [];
-    group.push(mutation);
-    grouped.set(key, group);
+/**
+ * Explicitly retry a terminal rejection. This is deliberately separate from
+ * generic retry, which only expedites known-safe pending network work.
+ */
+export async function retryRejectedTaskMutation(userId: string, mutationId: string): Promise<void> {
+  const mutation = await taskDb.outbox.get(mutationId);
+  if (!mutation || mutation.userId !== userId || mutation.syncState !== 'rejected' || mutation.inFlight) {
+    throw new Error('This saved change is not available to retry.');
   }
 
-  const latestMutations: TaskMutation[] = [];
-  await taskDb.transaction('rw', taskDb.outbox, async () => {
-    await Promise.all([...grouped.values()].map(async (group) => {
-      const unsentPending = group.filter((mutation) => !mutation.inFlight);
-      if (unsentPending.length === 0) {
-        return;
-      }
+  await taskDb.outbox.update(mutationId, {
+    syncState: 'pending',
+    syncError: undefined,
+    nextAttemptAt: Date.now(),
+  });
+}
 
-      const latest = unsentPending[unsentPending.length - 1];
-      const baseUpdatedAt = group[0].baseUpdatedAt;
-      if (unsentPending.length > 1) {
-        await Promise.all(unsentPending.slice(0, -1).map((mutation) => taskDb.outbox.delete(mutation.id)));
-      }
-      await taskDb.outbox.update(latest.id, { baseUpdatedAt, inFlight: true });
-      latestMutations.push({ ...latest, baseUpdatedAt, inFlight: true });
+/**
+ * Preserve an unaccepted conflict for recovery history while applying the
+ * canonical task the user explicitly chose. It is never deleted here.
+ */
+export async function discardTaskConflict(userId: string, mutationId: string): Promise<TaskView> {
+  const mutation = await taskDb.outbox.get(mutationId);
+  if (!mutation || mutation.userId !== userId || mutation.syncState !== 'conflict' || !mutation.canonicalTask) {
+    throw new Error('The latest server version is unavailable.');
+  }
+
+  await taskDb.outbox.update(mutationId, {
+    syncState: 'rejected',
+    inFlight: false,
+    syncError: 'You chose the latest server version. Your local version remains in recovery history.',
+  });
+  return mutation.canonicalTask;
+}
+
+async function selectDueMutations(userId: string): Promise<TaskMutation[]> {
+  const now = Date.now();
+  const mutations = await taskDb.outbox.where('userId').equals(userId).toArray();
+  const earliestByTask = new Map<string, TaskMutation>();
+  for (const mutation of mutations.sort((first, second) => first.createdAt - second.createdAt)) {
+    const key = mutation.payload.id ?? mutation.id;
+    if (!earliestByTask.has(key)) earliestByTask.set(key, mutation);
+  }
+
+  const mutationsToFlush: TaskMutation[] = [];
+  await taskDb.transaction('rw', taskDb.outbox, async () => {
+    await Promise.all([...earliestByTask.values()].map(async (mutation) => {
+      // A task is a FIFO mutation chain. A later edit cannot leave until every
+      // older edit has been acknowledged, including after a failed request.
+      if (mutation.syncState !== 'pending' || mutation.inFlight || mutation.nextAttemptAt > now) return;
+      await taskDb.outbox.update(mutation.id, { inFlight: true });
+      mutationsToFlush.push({ ...mutation, inFlight: true });
     }));
   });
-  return latestMutations.sort((first, second) => first.createdAt - second.createdAt);
+  return mutationsToFlush.sort((first, second) => first.createdAt - second.createdAt);
 }
 
 export async function flushTaskOutbox(
   userId: string,
   fetcher: TaskOutboxFetcher,
 ): Promise<TaskSyncResponse> {
-  const dueMutations = (await taskDb.outbox.where('userId').equals(userId).toArray())
-    .filter((mutation) => mutation.syncState === 'pending' && mutation.nextAttemptAt <= Date.now())
-    .sort((first, second) => first.createdAt - second.createdAt);
-
-  if (dueMutations.length === 0) {
+  const mutationsToFlush = await selectDueMutations(userId);
+  if (mutationsToFlush.length === 0) {
     return { accepted: [], rejected: [], nextRetryAt: await nextRetryAt(userId) };
   }
-
-  const mutationsToFlush = await coalesceDueMutations(dueMutations);
   let response: TaskSyncResponse;
   try {
     response = await fetcher(mutationsToFlush);
