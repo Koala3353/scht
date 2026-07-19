@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Scht</title>
+  <rect width="512" height="512" rx="112" fill="#075e60"/>
+  <path d="M120 152c0-18 14-32 32-32h208c18 0 32 14 32 32v208c0 18-14 32-32 32H152c-18 0-32-14-32-32V152Z" fill="#f4f7f7"/>
+  <path d="M184 194h144M184 256h144M184 318h92" stroke="#075e60" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="352" cy="318" r="28" fill="#a94308"/>
+</svg>

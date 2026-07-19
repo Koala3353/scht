@@ -1,10 +1,17 @@
-import { BellRing, Cable, KeyRound, SlidersHorizontal } from "lucide-react";
+import {
+  BellRing,
+  Cable,
+  CircleHelp,
+  KeyRound,
+  SlidersHorizontal,
+} from "lucide-react";
 
 const items = [
   { href: "#connections", label: "Connections", icon: Cable },
   { href: "#ai-vault", label: "AI vault", icon: KeyRound },
   { href: "#academic-scale", label: "Academic scale", icon: SlidersHorizontal },
   { href: "#reminders", label: "Reminders", icon: BellRing },
+  { href: "/help", label: "Help", icon: CircleHelp },
 ];
 
 export function SettingsNavigation() {

@@ -377,12 +377,11 @@ export function LandingPage() {
       <footer className="bg-[#083f42] px-5 pb-7 sm:px-8 lg:px-10">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-white/15 pt-6 text-sm text-teal-100 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Scht. Planning with context.</p>
-          <a
-            className="font-bold text-white transition hover:text-[#f3b68b]"
-            href="#top"
-          >
-            Back to top
-          </a>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            <Link className="font-bold text-white transition hover:text-[#f3b68b]" href="/privacy">Privacy</Link>
+            <Link className="font-bold text-white transition hover:text-[#f3b68b]" href="/terms">Terms</Link>
+            <a className="font-bold text-white transition hover:text-[#f3b68b]" href="#top">Back to top</a>
+          </div>
         </div>
       </footer>
     </main>

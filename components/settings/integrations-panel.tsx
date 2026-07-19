@@ -128,10 +128,14 @@ export function IntegrationsPanel() {
             <label className="text-sm font-bold text-ink">
               Canvas base URL
               <input
+                autoCapitalize="none"
+                autoCorrect="off"
                 className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink placeholder:text-slate-600 focus:border-teal"
+                inputMode="url"
                 onChange={(event) => setCanvasUrl(event.target.value)}
                 placeholder="https://canvas.example.edu"
                 required
+                spellCheck={false}
                 type="url"
                 value={canvasUrl}
               />
@@ -139,9 +143,14 @@ export function IntegrationsPanel() {
             <label className="text-sm font-bold text-ink">
               Personal API token
               <input
+                autoCapitalize="none"
+                autoComplete="off"
+                autoCorrect="off"
                 className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
+                maxLength={4096}
                 onChange={(event) => setCanvasToken(event.target.value)}
                 required
+                spellCheck={false}
                 type="password"
                 value={canvasToken}
               />

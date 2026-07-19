@@ -96,6 +96,8 @@ export default function GetStartedPage() {
             <p className="mt-5 text-sm leading-6 text-slate-600">
               By continuing, you are asking Scht to send a secure authentication
               link to the email you provide.
+              {" "}Read the <Link className="font-bold text-teal underline underline-offset-2" href="/privacy">Privacy Policy</Link>
+              {" "}and <Link className="font-bold text-teal underline underline-offset-2" href="/terms">Terms of Service</Link>.
             </p>
           </div>
         </section>

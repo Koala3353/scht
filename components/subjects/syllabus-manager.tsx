@@ -18,7 +18,7 @@ export function SyllabusManager({ subjectId, syllabus: initialSyllabus }: { subj
     setBusy(true); setNotice('');
     const response = await fetch('/api/syllabi', { method: 'POST', body: form });
     const body = await response.json() as { error?: string; id?: string; candidate_weights?: Weight[]; validation_state?: string };
-    if (response.ok && body.id) { const next = { id: body.id, candidate_weights: body.candidate_weights ?? [], validation_state: body.validation_state ?? 'pending' }; setSyllabus(next); setWeights(next.candidate_weights); setNotice(next.candidate_weights.length ? 'Extracted grade weights are ready for your review.' : 'Syllabus uploaded. Add the grade categories from your syllabus below.'); }
+    if (response.ok && body.id) { const next = { id: body.id, candidate_weights: body.candidate_weights ?? [], validation_state: body.validation_state ?? 'pending' }; setSyllabus(next); setWeights(next.candidate_weights); setNotice(next.candidate_weights.length ? 'Extracted grade weights are ready for your review.' : 'Syllabus uploaded. PDF and text files are checked for grade weights; add or edit categories below if needed.'); }
     else setNotice(body.error ?? 'Could not upload the syllabus.');
     setBusy(false);
   }

@@ -32,6 +32,8 @@ export function SubjectUnitsEditor({
         <input
           aria-label="Course units"
           className="mt-1 block w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm font-semibold text-ink normal-case tracking-normal"
+          inputMode="decimal"
+          max="30"
           min="0.5"
           onChange={(event) => setUnits(event.target.value)}
           step="0.5"

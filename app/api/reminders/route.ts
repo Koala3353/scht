@@ -19,10 +19,14 @@ function outsideQuietHours(sendAt: Date, quietStart: string | null, quietEnd: st
 }
 export async function POST(request: Request) {
   const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-  const body = await request.json().catch(() => null) as { timezone?: string; quietStart?: string | null; quietEnd?: string | null; enabled?: boolean } | null;
+  const body = await request.json().catch(() => null) as { timezone?: string; quietStart?: string | null; quietEnd?: string | null; enabled?: boolean; digestWindowDays?: number; digestEnabled?: boolean; digestTime?: string } | null;
   if (!body?.timezone || (body.quietStart && !validTime(body.quietStart)) || (body.quietEnd && !validTime(body.quietEnd))) return NextResponse.json({ error: 'Use an IANA time zone and valid quiet-hour times.' }, { status: 400 });
+  const digestWindowDays = Number(body.digestWindowDays ?? 3);
+  const digestTime = body.digestTime ?? '07:00';
+  if (![1, 3, 7, 14].includes(digestWindowDays)) return NextResponse.json({ error: 'Choose a 1, 3, 7, or 14-day email timeline.' }, { status: 400 });
+  if (!validTime(digestTime)) return NextResponse.json({ error: 'Choose a valid daily digest time.' }, { status: 400 });
   try { Intl.DateTimeFormat(undefined, { timeZone: body.timezone }); } catch { return NextResponse.json({ error: 'Use a valid IANA time zone, such as Asia/Manila.' }, { status: 400 }); }
-  const { error } = await supabase.from('reminder_preferences').upsert({ user_id: user.id, timezone: body.timezone, quiet_start: body.quietStart ?? null, quiet_end: body.quietEnd ?? null, enabled: body.enabled !== false }, { onConflict: 'user_id' });
+  const { error } = await supabase.from('reminder_preferences').upsert({ user_id: user.id, timezone: body.timezone, quiet_start: body.quietStart ?? null, quiet_end: body.quietEnd ?? null, enabled: body.enabled !== false, digest_window_days: digestWindowDays, digest_enabled: body.digestEnabled === true, digest_time: digestTime }, { onConflict: 'user_id' });
   return error ? NextResponse.json({ error: error.message }, { status: 502 }) : NextResponse.json({ saved: true });
 }
 export async function PUT(request: Request) {

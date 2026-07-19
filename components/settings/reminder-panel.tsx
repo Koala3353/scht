@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { BellRing, Clock3, MailCheck } from "lucide-react";
+import { BellRing, Clock3, MailCheck, Sparkles } from "lucide-react";
 
 type Task = { id: string; title: string; due_at: string | null };
 type Preference = {
@@ -9,6 +9,9 @@ type Preference = {
   quiet_start: string | null;
   quiet_end: string | null;
   enabled: boolean;
+  digest_window_days: number | null;
+  digest_enabled: boolean | null;
+  digest_time: string | null;
 } | null;
 
 export function ReminderPanel({
@@ -19,6 +22,7 @@ export function ReminderPanel({
   tasks: Task[];
 }) {
   const [enabled, setEnabled] = useState(preference?.enabled ?? true);
+  const [digestEnabled, setDigestEnabled] = useState(preference?.digest_enabled ?? false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -34,12 +38,15 @@ export function ReminderPanel({
         timezone: form.get("timezone"),
         quietStart: form.get("quietStart") || null,
         quietEnd: form.get("quietEnd") || null,
+        digestWindowDays: Number(form.get("digestWindowDays")),
+        digestEnabled,
+        digestTime: form.get("digestTime"),
       }),
     });
     const body = (await response.json()) as { error?: string };
     setNotice(
       response.ok
-        ? "Reminder preferences saved."
+        ? "Reminder preferences and your email timeline are saved."
         : (body.error ?? "Could not save preferences."),
     );
     setBusy(false);
@@ -69,67 +76,54 @@ export function ReminderPanel({
             <BellRing className="size-5" aria-hidden="true" />
           </span>
           <p className="mt-5 text-sm font-semibold text-teal">Reminders</p>
-          <h2
-            className="mt-1 text-2xl font-black tracking-tight"
-            id="reminders-heading"
-          >
+          <h2 className="mt-1 text-2xl font-black tracking-tight" id="reminders-heading">
             Let the right prompt arrive.
           </h2>
           <p className="mt-3 max-w-md leading-7 text-slate-700">
-            Choose a delivery window, then schedule reminders only for tasks
-            that have a real due date. The protected Apps Script companion
-            handles delivery.
+            Schedule task reminders when you need them, or opt into one calm daily timeline. Each email draws only from Calendar, Gmail, Canvas, and tasks already imported into Scht.
           </p>
+          <div className="mt-5 flex items-start gap-3 rounded-xl bg-[#f7faf9] p-4 text-sm leading-6 text-slate-700">
+            <Sparkles className="mt-0.5 size-4 shrink-0 text-teal" aria-hidden="true" />
+            <p><strong className="text-ink">Your connections stay scoped.</strong> The digest only summarises items already imported into your workspace; it never grants Apps Script access to your Google or Canvas accounts.</p>
+          </div>
         </div>
 
-        <form
-          className="grid content-start gap-4 sm:grid-cols-2"
-          onSubmit={save}
-        >
+        <form className="grid content-start gap-4 sm:grid-cols-2" onSubmit={save}>
           <label className="text-sm font-bold text-ink sm:col-span-2">
             Time zone
-            <input
-              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
-              defaultValue={
-                preference?.timezone ??
-                Intl.DateTimeFormat().resolvedOptions().timeZone
-              }
-              name="timezone"
-              required
-            />
+            <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" defaultValue={preference?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} name="timezone" required />
           </label>
           <label className="text-sm font-bold text-ink">
             Quiet hours start
-            <input
-              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
-              defaultValue={preference?.quiet_start?.slice(0, 5) ?? ""}
-              name="quietStart"
-              type="time"
-            />
+            <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" defaultValue={preference?.quiet_start?.slice(0, 5) ?? ""} name="quietStart" type="time" />
           </label>
           <label className="text-sm font-bold text-ink">
             Quiet hours end
-            <input
-              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
-              defaultValue={preference?.quiet_end?.slice(0, 5) ?? ""}
-              name="quietEnd"
-              type="time"
-            />
+            <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" defaultValue={preference?.quiet_end?.slice(0, 5) ?? ""} name="quietEnd" type="time" />
           </label>
+          <label className="text-sm font-bold text-ink sm:col-span-2">
+            Email timeline
+            <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" defaultValue={String(preference?.digest_window_days ?? 3)} name="digestWindowDays">
+              <option value="1">Next day</option>
+              <option value="3">Next 3 days</option>
+              <option value="7">Next 7 days</option>
+              <option value="14">Next 14 days</option>
+            </select>
+            <span className="mt-1.5 block text-xs font-normal leading-5 text-slate-600">Used in scheduled reminders and the optional daily email. It combines imported Google Calendar events, Canvas deadlines, unread Gmail follow-ups, and your own due-dated tasks.</span>
+          </label>
+          <div className="rounded-xl bg-[#f7faf9] p-3 sm:col-span-2">
+            <label className="flex min-h-11 items-center gap-3 text-sm font-bold text-ink">
+              <input checked={digestEnabled} className="size-4 accent-[#075e60]" onChange={(event) => setDigestEnabled(event.target.checked)} type="checkbox" />
+              Send one daily timeline email
+            </label>
+            <label className="mt-3 block text-sm font-bold text-ink">Daily delivery time<input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" defaultValue={preference?.digest_time?.slice(0, 5) ?? "07:00"} disabled={!digestEnabled} name="digestTime" type="time" /></label>
+            <p className="mt-2 text-xs font-normal leading-5 text-slate-600">The Apps Script trigger checks this time in your selected time zone and sends at most one daily digest.</p>
+          </div>
           <label className="flex min-h-11 items-center gap-3 rounded-xl bg-[#f7faf9] px-3 text-sm font-bold text-ink sm:col-span-2">
-            <input
-              checked={enabled}
-              className="size-4 accent-[#075e60]"
-              onChange={(event) => setEnabled(event.target.checked)}
-              type="checkbox"
-            />
+            <input checked={enabled} className="size-4 accent-[#075e60]" onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />
             Enable email reminders
           </label>
-          <button
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
-            disabled={busy}
-            type="submit"
-          >
+          <button className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2" disabled={busy} type="submit">
             Save delivery preferences
           </button>
         </form>
@@ -139,54 +133,29 @@ export function ReminderPanel({
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-teal">Ready to schedule</p>
-            <h3 className="mt-1 text-xl font-black tracking-tight">
-              Due-dated tasks
-            </h3>
+            <h3 className="mt-1 text-xl font-black tracking-tight">Due-dated tasks</h3>
           </div>
           <MailCheck className="size-5 text-teal" aria-hidden="true" />
         </div>
         {tasks.length ? (
           <ul className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
             {tasks.map((task) => (
-              <li
-                className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between"
-                key={task.id}
-              >
+              <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between" key={task.id}>
                 <div>
                   <p className="font-bold text-ink">{task.title}</p>
-                  <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600">
-                    <Clock3 className="size-4" aria-hidden="true" />
-                    Due{" "}
-                    {task.due_at
-                      ? new Date(task.due_at).toLocaleString()
-                      : "unscheduled"}
-                  </p>
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600"><Clock3 className="size-4" aria-hidden="true" />Due {task.due_at ? new Date(task.due_at).toLocaleString() : "unscheduled"}</p>
                 </div>
-                <button
-                  className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal px-4 py-2 text-sm font-bold text-white transition hover:bg-[#064c4e] disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={busy || !enabled}
-                  onClick={() => void queue(task.id)}
-                  type="button"
-                >
+                <button className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal px-4 py-2 text-sm font-bold text-white transition hover:bg-[#064c4e] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !enabled} onClick={() => void queue(task.id)} type="button">
                   Schedule reminder
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="mt-4 rounded-xl bg-[#f7faf9] px-4 py-4 text-sm leading-6 text-slate-700">
-            No open tasks with due dates are ready to schedule yet.
-          </p>
+          <p className="mt-4 rounded-xl bg-[#f7faf9] px-4 py-4 text-sm leading-6 text-slate-700">No open tasks with due dates are ready to schedule yet.</p>
         )}
       </div>
-      {notice && (
-        <p
-          className="mt-4 rounded-xl bg-[#e6f2f0] px-4 py-3 text-sm font-semibold text-teal"
-          role="status"
-        >
-          {notice}
-        </p>
-      )}
+      {notice && <p className="mt-4 rounded-xl bg-[#e6f2f0] px-4 py-3 text-sm font-semibold text-teal" role="status">{notice}</p>}
     </section>
   );
 }

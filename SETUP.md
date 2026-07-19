@@ -1,126 +1,236 @@
-# Scht setup and deployment
+# Deploying Scht
 
-## 1. Prerequisites
+This guide takes a new Scht installation from local development to a working Vercel deployment with Supabase authentication, Google Calendar/Gmail sync, Canvas import, AI, QPI/GPA tracking, Apps Script reminders, and owner administration.
 
-- Node.js 20 or newer
+The intended production URL is [scht-admu.vercel.app](https://scht-admu.vercel.app). Assign it to a ready Vercel production deployment before using it in Supabase or Apps Script settings.
+
+## 1. What you need
+
+- Node.js 20 or newer and npm
 - A Supabase project
-- A Google Cloud project (optional, for Google sign-in)
-- A Vercel account (for hosting)
-- An Apps Script project (optional, for reminder dispatch)
+- A Google Cloud project (`scht-502902` for the current deployment)
+- A Vercel account connected to [Koala3353/scht](https://github.com/Koala3353/scht)
+- A Google account for Apps Script if email reminders are needed
+- Optional: a Canvas personal access token and a personal OpenAI or Hack Club AI key for each user who wants those features
 
-## 2. Local application
+## 2. Install and run locally
 
 ```bash
 cd 'School Tool "Scht"/.worktrees/scht-foundation'
 npm ci
 cp .env.example .env.local
-```
-
-Set `.env.local`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-# The Supabase `sb_publishable_...` key belongs here.
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
-NEXT_PUBLIC_APP_URL=http://localhost:3001
-```
-
-Add these server-only values before connecting integrations:
-
-```env
-INTEGRATION_ENCRYPTION_KEY=<base64-encoded-32-byte-key>
-GOOGLE_OAUTH_CLIENT_ID=<google-web-client-id>
-GOOGLE_OAUTH_CLIENT_SECRET=<google-web-client-secret>
-REMINDER_DISPATCH_TOKEN=<long-random-secret>
-```
-
-Do not add a Supabase secret/service key to `NEXT_PUBLIC_*` variables. The current app does not require one for normal user authentication or data access.
-
-Run on a dedicated port so it does not conflict with another Next.js project:
-
-```bash
 npm run dev -- --port 3001
 ```
 
-Open `http://localhost:3001`.
+Open [http://localhost:3001](http://localhost:3001). Use port `3001` if port `3000` is occupied by another project.
 
-## 3. Supabase database and first invite
+For a development-only walkthrough, enter exactly `adminadminadmin` in the first email field. The demo route is disabled from production builds. With a configured service-role key it creates a seeded Supabase demo workspace; without one it opens the local preview page.
 
-In the Supabase SQL Editor, run all files in `supabase/migrations` in ascending numeric order. The migrations create the tables, row-level security policies, task sync structures, academic records, and reminder structures.
+## 3. Environment variables
 
-The app is invite-only. After applying migrations, create the first invite in the SQL Editor (replace the email):
+Copy `.env.example` to `.env.local`. Never commit `.env.local`, and never put a server secret in a `NEXT_PUBLIC_` variable.
+
+| Variable                               | Value to set                                                                                                                        | Required for                                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase Dashboard → Project Settings → API → Project URL, e.g. `https://<project-ref>.supabase.co`.                                | Every environment.                                                  |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase’s public `sb_publishable_...` key.                                                                                         | Every environment.                                                  |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Legacy alternative to `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`; set **one**, not both.                                                | Every environment if using the legacy key name.                     |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Supabase Dashboard → Project Settings → API → `service_role` secret. It must remain server-only.                                    | Owner data export, Apps Script dispatch, and the seeded local demo. |
+| `NEXT_PUBLIC_APP_URL`                  | `http://localhost:3001` locally. In Vercel, the exact deployment URL, currently `https://scht-admu.vercel.app`. | Auth and provider return URLs.                                      |
+| `INTEGRATION_ENCRYPTION_KEY`           | A base64-encoded 32-byte random key. Generate it with the command below. Keep the same value after deployment.                      | Encrypting Canvas and Google connection tokens.                     |
+| `GOOGLE_OAUTH_CLIENT_ID`               | The Google **Web application** OAuth client ID configured in Supabase.                                                              | Google Calendar and Gmail sync.                                     |
+| `GOOGLE_OAUTH_CLIENT_SECRET`           | The matching Google OAuth client secret.                                                                                            | Google Calendar and Gmail sync.                                     |
+| `GOOGLE_CLOUD_PROJECT_ID`              | `scht-502902` for this project, or your replacement Google Cloud project ID.                                                        | The owner-admin link to Google test users.                          |
+| `REMINDER_DISPATCH_TOKEN`              | A long random shared secret generated below. Use the identical value in Apps Script script properties.                              | Protected reminder delivery.                                        |
+| `HACK_CLUB_AI_BASE_URL`                | Leave `https://ai.hackclub.com/v1` unless Hack Club gives you another compatible endpoint.                                          | Hack Club AI provider.                                              |
+
+Generate the random server values once:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Use the first output for `INTEGRATION_ENCRYPTION_KEY`; use the second for `REMINDER_DISPATCH_TOKEN`. Rotate either value only with care: changing the encryption key makes previously stored integration credentials unreadable.
+
+### Vercel environment setup
+
+In Vercel → **Scht** → Settings → Environment Variables, add the variables above to the environments where they are needed:
+
+- **Production:** all enabled features, and `NEXT_PUBLIC_APP_URL` set to the production URL.
+- **Preview:** public Supabase values and a preview-safe `NEXT_PUBLIC_APP_URL`; add server values only if you intentionally test those integrations in previews.
+- **Development:** local values if you use `vercel env pull`; otherwise `.env.local` is enough.
+
+After changing any variable, redeploy. Vercel only exposes `NEXT_PUBLIC_*` values at build time.
+
+## 4. Create the Supabase database
+
+In Supabase Dashboard → SQL Editor, run each migration in this exact order:
+
+```text
+supabase/migrations/0001_foundation.sql
+supabase/migrations/0002_validate_scoped_reference_owners.sql
+supabase/migrations/0003_add_curriculum_import_fields.sql
+supabase/migrations/0004_add_sync_errors.sql
+supabase/migrations/0005_academics_automation.sql
+supabase/migrations/0006_provider_sync_and_syllabus_storage.sql
+supabase/migrations/0007_academic_scale_and_subject_units.sql
+supabase/migrations/0008_reminder_email_digest.sql
+supabase/migrations/0009_projects_and_daily_digests.sql
+```
+
+They create the invite-only workspace, row-level security policies, subjects and QPI/GPA records, task sync, encrypted integration storage, syllabi, reminders, and audit log. Apply migrations before deploying; the app will not work correctly with only a subset.
+
+Create the first owner invite after the migrations, replacing the email address:
 
 ```sql
 insert into public.invites (email, role)
 values ('you@example.com', 'owner_admin');
 ```
 
-Use `member` for ordinary users. The first successful sign-in accepts the matching invite and creates the profile.
+The user’s first successful sign-in accepts the invite and creates their profile. Ordinary people should have the `member` role.
 
-## 4. Google sign-in
+## 5. Configure Supabase authentication
 
-1. In Google Cloud Console, configure the OAuth consent screen and add your account as a test user while the app remains in testing.
-2. Create an OAuth client of type **Web application**.
-3. Add this exact Google authorized redirect URI:
+In Supabase Dashboard → Authentication → URL Configuration:
 
-   ```text
-   https://<project-ref>.supabase.co/auth/v1/callback
-   ```
+- **Site URL**: `http://localhost:3001` for local development. In Production, set it to `https://scht-admu.vercel.app`.
+- Add **Redirect URLs**:
 
-4. In Supabase Dashboard → Authentication → Providers → Google, enable Google and paste the Google client ID and client secret.
-5. In Supabase Dashboard → Authentication → URL Configuration, set:
+  ```text
+  http://localhost:3001/auth/callback
+  https://scht-admu.vercel.app/auth/callback
+  ```
 
-   ```text
-   Site URL: http://localhost:3001
-   Redirect URL: http://localhost:3001/auth/callback
-   ```
+  Add your own Vercel production URL instead if it differs. Add a preview URL only when you deliberately support auth in previews.
 
-For production, replace the local URLs with `https://<your-vercel-domain>/` and `https://<your-vercel-domain>/auth/callback`.
+Supabase is the application’s authentication authority. Keep email confirmation and redirect settings appropriate to your institution’s policy.
 
-## 5. Apps Script reminder companion
+## 6. Configure Google sign-in, Calendar, and Gmail
 
-`apps-script/reminders.gs` is the owner-managed companion entry point. To install it:
+Scht uses one Google **Web application** OAuth client via Supabase. Its Calendar and Gmail integrations ask only for `calendar.readonly` and `gmail.readonly` access, and tokens are stored encrypted with `INTEGRATION_ENCRYPTION_KEY`.
 
-1. Create a new Google Apps Script project at `script.google.com`.
-2. Copy the contents of `apps-script/reminders.gs` into `Code.gs`.
-3. In Project Settings → Script properties, add:
+1. In [Google Auth Platform](https://console.cloud.google.com/auth), select project `scht-502902` (or the value of `GOOGLE_CLOUD_PROJECT_ID`).
+2. In Google Cloud → APIs & Services → Library, enable **Google Calendar API** and **Gmail API** for this project.
+3. Complete branding and audience setup. Set the application home page to `https://scht-admu.vercel.app`, the privacy policy URL to `https://scht-admu.vercel.app/privacy`, and the terms of service URL to `https://scht-admu.vercel.app/terms`. For an External app in **Testing**, add every person who needs Google sign-in or Calendar/Gmail sync at [Google Auth Platform → Audience → Test users](https://console.cloud.google.com/auth/audience?project=scht-502902).
+4. Add the Calendar and Gmail read-only scopes to the consent configuration:
 
    ```text
-   SCHT_REMINDER_ENDPOINT=https://<your-domain>/api/reminders/dispatch
-   SCHT_REMINDER_TOKEN=<long-random-secret>
+   https://www.googleapis.com/auth/calendar.readonly
+   https://www.googleapis.com/auth/gmail.readonly
    ```
 
-4. Add the same token as a server-only environment variable in the reminder-dispatch service.
-5. Create a time-driven trigger for `dispatchSchtReminders` at your chosen cadence.
-6. Run it once manually and grant the requested `UrlFetchApp` permission.
+5. Create one Web application OAuth client at [Create OAuth client](https://console.cloud.google.com/auth/clients/create?project=scht-502902). The client’s **Authorized redirect URI** must be exactly:
 
-The companion safely fails if its endpoint or token is missing. It is intentionally not enabled by default: this repository includes the scheduling helper and reminder queue schema, but you must deploy a protected reminder-dispatch endpoint and choose an email provider before it can send email. Never put its dispatch token in a browser-accessible environment variable.
+   ```text
+   https://bethierxqssasenuzhal.supabase.co/auth/v1/callback
+   ```
 
-## 6. GitHub
+   Replace `<project-ref>` with your Supabase project reference. Do not put the Scht app URL in this Google field; Supabase receives Google’s callback first.
 
-Push the branch, then open a pull request or merge to `main`:
+6. Copy the client ID and client secret to `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` in Vercel (and `.env.local` when testing locally).
+7. In Supabase Dashboard → Authentication → Providers → Google, enable Google and paste the same client ID and client secret.
+8. Sign in to Scht, open Settings, choose **Connect Google**, approve the requested read-only access, then choose **Sync Google**.
 
-```bash
-git push -u origin feature/scht-foundation
+Google’s testing audience can contain up to the limit Google applies to test users. A test user must be added in Google Cloud manually; Scht never receives authority to change your Google Cloud project. The owner-admin **Add account** flow saves the Scht invite, then shows the exact email and opens the correct Test users page so the owner can add it.
+
+## 7. Configure Canvas
+
+Canvas is connected per user and does not require an owner server key.
+
+1. In the user’s Canvas account, create a personal access token.
+2. In Scht Settings, enter the Canvas base URL (for example, `https://canvas.example.edu`) and the token.
+3. Select **Connect Canvas**, then **Sync assignments**.
+
+Scht validates the connection, encrypts the token before saving it, imports active courses and assignments, and associates the data with the selected academic term. A school may restrict personal access tokens; follow its Canvas policy.
+
+## 8. Configure AI features
+
+Users provide their own key in Settings → **Encrypted AI key vault**. The key is encrypted in the browser with the user’s passphrase before it is stored. Scht uses it only while the user explicitly unlocks the vault and requests a proposal.
+
+- For OpenAI, choose the OpenAI provider and enter a user-created API key.
+- For Hack Club, choose Hack Club and enter the user’s Hack Club AI key. Keep `HACK_CLUB_AI_BASE_URL=https://ai.hackclub.com/v1` unless a replacement endpoint is supplied.
+
+AI proposes tasks from planning text. It cannot write planner data until the user reviews and explicitly applies the proposal. Never put individual users’ AI keys in Vercel environment variables.
+
+## 9. Enable QPI/GPA, subjects, and syllabi
+
+After migration `0007`, Scht defaults to **Ateneo QPI**. Add each subject’s units on the Subjects page, enter approved assessment categories and scores, and Scht calculates a units-weighted QPI. In Settings, select **4.0 GPA** to use the alternative GPA scale.
+
+For a syllabus, upload it from the subject card. Text files receive candidate grade-weight extraction; PDF and DOC/DOCX files are stored but currently need manual category entry. Review every category, ensure weights total exactly 100%, and approve them before entering scores. Always defer to the school’s official and current grading policy; the built-in QPI mapping is an estimate.
+
+## 10. Deploy Apps Script reminders
+
+Scht’s reminder worker is [apps-script/reminders.gs](apps-script/reminders.gs). It calls the protected Vercel route, sends a responsive HTML email from the script owner’s Google account, and acknowledges each job. Scheduled task reminders and the optional daily timeline email both use the student’s chosen 1, 3, 7, or 14-day window. That timeline combines only data already imported into Scht: Google Calendar events, Canvas deadlines, Gmail follow-ups, and due-dated Scht tasks.
+
+1. Create a Google Apps Script project at [script.google.com](https://script.google.com).
+2. Replace `Code.gs` with the contents of `apps-script/reminders.gs`.
+3. In Project Settings → Script properties, set:
+
+   ```text
+   SCHT_REMINDER_ENDPOINT=https://scht-admu.vercel.app/api/reminders/dispatch
+   SCHT_REMINDER_TOKEN=<the exact REMINDER_DISPATCH_TOKEN from Vercel>
+   ```
+
+   Use your actual production domain if it differs.
+
+4. Create a time-driven trigger for `dispatchSchtReminders` every 15 minutes. Select the account and timezone intentionally: `MailApp` sends from that account, and its quota applies to that account.
+5. Run `dispatchSchtReminders` once manually and approve the `UrlFetchApp` and `MailApp` permissions.
+6. In Scht **Settings → Reminders**, choose the timeline window, optionally turn on the daily email and pick its delivery time, then save. Connect/sync Google or Canvas first if you want those items in the email.
+7. Create a due-dated task, schedule a reminder, and verify the HTML email has the reminder, timeline, and Gmail review list (when unread Gmail items were imported).
+
+The Apps Script project never receives Google OAuth, Canvas, or Supabase credentials; it only needs the protected endpoint and `REMINDER_DISPATCH_TOKEN`. The dispatch route needs both `SUPABASE_SERVICE_ROLE_KEY` and `REMINDER_DISPATCH_TOKEN`; the latter is checked on every request. Do not expose either token in client-side code or a public Apps Script URL.
+
+## 11. Add accounts from the owner dashboard
+
+After the first owner signs in, open **Owner Admin** → **Add an account**.
+
+1. Enter the school email, choose `Student member` or `Owner admin`, and optionally set an expiry.
+2. Select **Add account**. This writes an `invites` record in Supabase and logs the action; it does not create a Google account or a Supabase user prematurely.
+3. If Google OAuth is still in Testing, use **Copy email** and **Open Google test users** in the success card. Add that exact email to the test-user list.
+4. The student signs in with that email. On their first accepted sign-in, their Scht profile is created.
+
+The link in the success card is intentionally:
+
+```text
+https://console.cloud.google.com/auth/audience?project=scht-502902
 ```
 
-Connect the GitHub repository to Vercel. Vercel will create Preview deployments for branches and a Production deployment when `main` is updated.
+The often-shared `/auth/clients/create` link is for creating the OAuth client once; it does not add a person to the OAuth test audience.
 
-## 7. Vercel
+## 12. Deploy with GitHub and Vercel
 
-1. In Vercel, import the GitHub repository and set the root directory to this Next.js project.
-2. Add these environment variables for **Production**, **Preview**, and **Development** as appropriate:
+The repository is already connected to GitHub at [Koala3353/scht](https://github.com/Koala3353/scht) and its Vercel project is `scht-admu`.
 
-   ```text
-   NEXT_PUBLIC_SUPABASE_URL
-   NEXT_PUBLIC_SUPABASE_ANON_KEY
-   NEXT_PUBLIC_APP_URL
-   ```
+For normal releases:
 
-3. Set `NEXT_PUBLIC_APP_URL` to the exact deployed URL for each environment. Preview deployments should use a preview-specific URL or only support email links after adding a wildcard redirect URL in Supabase.
-4. Deploy. After the first deployment, add its callback URL to Supabase URL Configuration and update the production Site URL.
+```bash
+git status
+git add <the files you changed>
+git commit -m "Describe the change"
+git push origin feature/scht-foundation
+```
 
-## 8. Checks
+In Vercel:
+
+1. Confirm the **Root Directory** is the directory containing `package.json` (the active Scht worktree/project).
+2. Set the Production Branch to the branch you intend to release, or merge that branch into your chosen production branch.
+3. Add all required production environment variables from section 3.
+4. Deploy and copy the final production domain into `NEXT_PUBLIC_APP_URL` and Supabase URL Configuration.
+5. Redeploy once more after changing those URLs.
+
+If you deploy through the CLI instead, link the already-created Vercel project and deploy:
+
+```bash
+vercel link --project scht
+vercel --prod
+```
+
+Avoid changing an old Vercel alias by editing code. A `404: NOT_FOUND` from `scht-kappa.vercel.app` means that host is not owned by this project; use the active project domain in Vercel → Settings → Domains, then update Supabase and `NEXT_PUBLIC_APP_URL` to match it.
+
+## 13. Verify the production deployment
+
+Run these checks before and after deployment:
 
 ```bash
 npm run lint
@@ -129,92 +239,31 @@ npm run build
 npm run test:e2e
 ```
 
-The browser test placeholders are skipped until a disposable Supabase project and authentication fixtures are configured.
+Then verify in the deployed app:
 
-## 9. Follow-on feature configuration
+1. Open the production URL and complete a normal Google sign-in with an invited email.
+2. Create a subject, set its units, and switch between QPI and GPA in Settings.
+3. Connect and sync Google or Canvas with a dedicated test account.
+4. Save and unlock an AI key, request a proposal, and confirm it only changes the planner after applying it.
+5. Add a reminder and confirm the Apps Script sends exactly one email.
+6. As an owner, add a test account and confirm the Google Test users link contains the expected project ID.
 
-The live integrations, reminders, encrypted AI vault, syllabus approval, grade-entry, and owner operations added after the initial foundation require the configuration below. This section supersedes earlier wording that described reminder dispatch as unavailable.
+## 14. Troubleshooting
 
-### Environment variables
+| Symptom                                                       | Fix                                                                                                                                                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Google says the app is blocked or the user is not authorized. | Add the email on Google Auth Platform → Audience → Test users, then try again.                                                                                                        |
+| `redirect_uri_mismatch` from Google.                          | The Google Web client must contain exactly `https://bethierxqssasenuzhal.supabase.co/auth/v1/callback`.                                                                                      |
+| Supabase sends users to the wrong domain.                     | Update Supabase Site URL and Redirect URLs, set `NEXT_PUBLIC_APP_URL` to the same environment’s domain, then redeploy.                                                                |
+| Calendar/Gmail connection fails after a deployment.           | Confirm the same Google client is enabled in Supabase and configured as `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`; confirm `INTEGRATION_ENCRYPTION_KEY` did not change. |
+| Apps Script returns 401 or sends nothing.                     | Match `SCHT_REMINDER_TOKEN` exactly to Vercel’s `REMINDER_DISPATCH_TOKEN`, and ensure the endpoint uses the active production domain.                                                 |
+| Owner export or seeded local demo errors about a service key. | Add the server-only `SUPABASE_SERVICE_ROLE_KEY`; never expose it in `NEXT_PUBLIC_*`.                                                                                                  |
+| A Vercel short URL returns `404: NOT_FOUND`.                  | Use the active `scht-admu` project domain shown in Vercel, not the retired `scht-kappa.vercel.app` alias.                                                                                  |
 
-The app accepts either public Supabase key name. With the key provided by the Supabase dashboard, use one—not both—of these forms:
+## 15. Security checklist
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-# or: NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
-NEXT_PUBLIC_APP_URL=http://localhost:3001
-
-# Server-only: never prefix these with NEXT_PUBLIC_
-SUPABASE_SERVICE_ROLE_KEY=<service_role key>
-INTEGRATION_ENCRYPTION_KEY=<base64 32-byte key>
-GOOGLE_OAUTH_CLIENT_ID=<Google web OAuth client ID>
-GOOGLE_OAUTH_CLIENT_SECRET=<Google web OAuth client secret>
-REMINDER_DISPATCH_TOKEN=<long random token>
-HACK_CLUB_AI_BASE_URL=https://ai.hackclub.com/v1
-```
-
-Generate the two random values locally:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-Use the first as `INTEGRATION_ENCRYPTION_KEY` and the second as `REMINDER_DISPATCH_TOKEN`.
-
-### Google Calendar and Gmail
-
-The Google web OAuth client configured in Supabase must be the same client whose ID and secret are supplied to Scht. In Google Cloud, add Calendar and Gmail read-only scopes to the consent screen. In Scht Settings, choose **Connect Google**, complete consent, then choose **Sync Google**. Imported events appear on Calendar and unread Gmail message subjects become deduplicated planner tasks.
-
-### Canvas
-
-Create a personal access token in your institution’s Canvas account. In Settings, enter the Canvas base URL (for example, `https://canvas.example.edu`) and that token, then choose **Connect Canvas** and **Sync assignments**. Scht validates the connection, encrypts the token using AES-256-GCM before persistence, then imports active courses and assignments into the selected academic term.
-
-### Syllabi, grades, and AI
-
-Upload a syllabus from a subject card. Text-based files have candidate grade weights extracted; review or add categories until the total is exactly 100%, then approve them. Record assessment scores from Grades only after a category has been approved.
-
-In Settings, save an OpenAI or Hack Club AI key through **Encrypted AI key vault** with a passphrase of at least 12 characters. It is encrypted in the browser using PBKDF2 plus AES-GCM before being stored. The AI workbench requires an unlocked key for each proposal and does not write tasks until the user explicitly applies the reviewed result.
-
-### Ateneo QPI and GPA
-
-Migration `0007_academic_scale_and_subject_units.sql` adds the academic-scale preference and course-unit field. After applying it, set each subject’s units from the Subjects page. Scht defaults to **Ateneo QPI** and uses the units-weighted formula: the quality-point equivalent of every graded subject multiplied by its course units, divided by the total counted units. In Settings, select **4.0 GPA** to use the same unit weighting with a percentage-to-4.0 estimate instead.
-
-The QPI percentage cutoffs are an estimate based on an [Ateneo QPI calculator](https://qpi.alexi.life/) and an [Ateneo course grading table](https://aisis.ateneo.edu/syllabi/2022/1/CS-MA-MATH199.11-TOLENTINO_M_DAVID_R_BENITO_D-T1-2022-1.pdf); always defer to your instructor’s or school’s current grading policy. Only subjects with at least one recorded assessment are counted.
-
-### Reminder delivery
-
-After deploying to Vercel, set Apps Script properties as follows:
-
-```text
-SCHT_REMINDER_ENDPOINT=https://<your-vercel-domain>/api/reminders/dispatch
-SCHT_REMINDER_TOKEN=<same REMINDER_DISPATCH_TOKEN>
-```
-
-Create a time-driven trigger for `dispatchSchtReminders` every 15 minutes and grant `UrlFetchApp` and `MailApp` permissions. Users save a time zone and quiet hours in Settings, then schedule a reminder from an open, due-dated task. The protected dispatch route returns pending jobs, Apps Script sends mail, and acknowledges successful or failed delivery.
-
-### Vercel
-
-Set every variable above in Vercel for the environments that use the corresponding feature. Add the Vercel production URL and `/auth/callback` redirect URL to Supabase Authentication URL Configuration. The Apps Script endpoint must point to the deployed production domain, never `localhost`.
-
-## 10. `.env.local` reference
-
-Copy `.env.example` to `.env.local`, then configure every entry as follows. Keep `.env.local` out of Git.
-
-| Variable                               | What to enter                                                                                                                                                                         | Required for                                            |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Your Supabase project URL, such as `https://<project-ref>.supabase.co`.                                                                                                               | Always.                                                 |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | The public `sb_publishable_...` key from Supabase API Keys. Use this **or** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.                                                                   | Always.                                                 |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same public key, using Supabase’s current variable name. Leave `NEXT_PUBLIC_SUPABASE_ANON_KEY` empty when using this form.                                                        | Always, as an alternative to the anonymous-key name.    |
-| `SUPABASE_SERVICE_ROLE_KEY`            | The server-side `service_role` key from Supabase API Keys. Never expose it to the browser or commit it.                                                                               | Owner exports, reminder dispatch, and local demo login. |
-| `NEXT_PUBLIC_APP_URL`                  | `http://localhost:3001` locally; the exact Vercel URL in each deployed environment.                                                                                                   | Auth redirects and provider callbacks.                  |
-| `INTEGRATION_ENCRYPTION_KEY`           | A base64-encoded 32-byte random key. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.                                                     | Canvas and Google token encryption.                     |
-| `GOOGLE_OAUTH_CLIENT_ID`               | The Web OAuth client ID from Google Cloud—the same client configured in Supabase’s Google provider.                                                                                   | Refreshing Google Calendar/Gmail connections.           |
-| `GOOGLE_OAUTH_CLIENT_SECRET`           | The matching Web OAuth client secret from Google Cloud.                                                                                                                               | Refreshing Google Calendar/Gmail connections.           |
-| `REMINDER_DISPATCH_TOKEN`              | A long random shared secret, for example `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Configure the same value as Apps Script’s `SCHT_REMINDER_TOKEN`. | Protected Apps Script reminder delivery.                |
-| `HACK_CLUB_AI_BASE_URL`                | Leave as `https://ai.hackclub.com/v1` unless Hack Club provides a replacement endpoint.                                                                                               | Hack Club AI provider.                                  |
-
-### Local demo sign-in
-
-On the first screen, type exactly `adminadminadmin` in the email field and submit. In local development, Scht opens an interactive preview workspace immediately—no credentials required. If `SUPABASE_SERVICE_ROLE_KEY` is present, it instead creates or reuses `adminadminadmin@demo.scht.local`, seeds a small member workspace, and follows Supabase’s normal one-time login flow. The demo endpoint and preview page return 404 in production builds.
+- Keep `.env.local`, Vercel secret values, Google client secrets, service-role keys, reminder tokens, Canvas tokens, and personal AI keys out of Git.
+- Use separate Google/Supabase/Vercel projects for testing and production when possible.
+- Rotate a compromised secret immediately; reconnect integrations if the encryption key changes.
+- Review Google scopes, Canvas policy, and your school’s data policy before inviting students.
+- Keep Google OAuth in Testing only while necessary; follow Google’s verification process before broad external use.
