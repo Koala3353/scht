@@ -26,7 +26,7 @@ vi.mock('../../lib/sync/db', () => ({
   },
 }));
 
-import { enqueueTaskMutation, flushTaskOutbox, retryTaskOutbox } from '../../lib/sync/outbox';
+import { discardTaskConflict, enqueueTaskMutation, flushTaskOutbox, resolveTaskConflict, retryTaskOutbox } from '../../lib/sync/outbox';
 
 const validTask = {
   title: 'Write reflection',
@@ -164,6 +164,76 @@ describe('task mutation outbox', () => {
     });
     expect(outbox.size).toBe(0);
     now.mockRestore();
+  });
+
+  it('keeps later edits pending behind a conflict and sends them after Keep local resolves the head', async () => {
+    const serverTask = {
+      id: taskId,
+      title: 'Server edit',
+      kind: 'school' as const,
+      priority: 'normal' as const,
+      description: '',
+      links: [],
+      updatedAt: '2026-07-19T11:00:00.000Z',
+      source: 'manual',
+      sourceId: null,
+    };
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'First local edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z', createdAt: 1 });
+    await enqueueTaskMutation({ id: 'm2', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'Second local edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z', createdAt: 2 });
+
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m1']);
+      return { accepted: [], rejected: [{ id: 'm1', reason: 'This task changed on another device.', syncState: 'conflict', task: serverTask }] };
+    });
+
+    expect(outbox.get('m1')).toMatchObject({ syncState: 'conflict', canonicalTask: serverTask });
+    expect(outbox.get('m2')).toMatchObject({ syncState: 'pending', payload: expect.objectContaining({ title: 'Second local edit' }) });
+    const blockedFetcher = vi.fn(async () => ({ accepted: [], rejected: [] }));
+    await flushTaskOutbox(userId, blockedFetcher);
+    expect(blockedFetcher).not.toHaveBeenCalled();
+
+    await resolveTaskConflict(userId, 'm1', { ...validTask, id: taskId, title: 'First local edit' });
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m1']);
+      return { accepted: [{ id: 'm1', task: { ...serverTask, title: 'First local edit', updatedAt: '2026-07-19T12:00:00.000Z' } }], rejected: [] };
+    });
+
+    expect(outbox.get('m2')).toMatchObject({ syncState: 'pending', baseUpdatedAt: '2026-07-19T12:00:00.000Z' });
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m2']);
+      return { accepted: [{ id: 'm2', task: { ...serverTask, title: 'Second local edit', updatedAt: '2026-07-19T13:00:00.000Z' } }], rejected: [] };
+    });
+    expect(outbox.size).toBe(0);
+  });
+
+  it('preserves and rebases later edits when Use latest server version resolves a conflict', async () => {
+    const serverTask = {
+      id: taskId,
+      title: 'Server edit',
+      kind: 'school' as const,
+      priority: 'normal' as const,
+      description: '',
+      links: [],
+      updatedAt: '2026-07-19T11:00:00.000Z',
+      source: 'manual',
+      sourceId: null,
+    };
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'First local edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z', createdAt: 1 });
+    await enqueueTaskMutation({ id: 'm2', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'Second local edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z', createdAt: 2 });
+    await flushTaskOutbox(userId, async () => ({
+      accepted: [],
+      rejected: [{ id: 'm1', reason: 'This task changed on another device.', syncState: 'conflict', task: serverTask }],
+    }));
+
+    await discardTaskConflict(userId, 'm1');
+    expect(outbox.get('m1')).toMatchObject({ syncState: 'rejected' });
+    expect(outbox.get('m2')).toMatchObject({ syncState: 'pending', baseUpdatedAt: serverTask.updatedAt });
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m2']);
+      return { accepted: [{ id: 'm2', task: { ...serverTask, title: 'Second local edit', updatedAt: '2026-07-19T12:00:00.000Z' } }], rejected: [] };
+    });
+    expect(outbox.get('m1')).toMatchObject({ syncState: 'rejected' });
+    expect(outbox.has('m2')).toBe(false);
   });
 
 });

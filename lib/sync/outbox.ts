@@ -60,12 +60,7 @@ async function deferMutations(mutations: TaskMutation[]) {
 
 async function nextRetryAt(userId: string): Promise<number | undefined> {
   const mutations = await taskDb.outbox.where('userId').equals(userId).toArray();
-  const earliestByTask = new Map<string, TaskMutation>();
-  for (const mutation of mutations.sort((first, second) => first.createdAt - second.createdAt)) {
-    const key = mutation.payload.id ?? mutation.id;
-    if (!earliestByTask.has(key)) earliestByTask.set(key, mutation);
-  }
-  const retryTimes = [...earliestByTask.values()]
+  const retryTimes = [...nextActionableMutationByTask(mutations).values()]
     .filter((mutation) => mutation.syncState === 'pending')
     .map((mutation) => mutation.nextAttemptAt);
 
@@ -146,22 +141,48 @@ export async function discardTaskConflict(userId: string, mutationId: string): P
     throw new Error('The latest server version is unavailable.');
   }
 
-  await taskDb.outbox.update(mutationId, {
-    syncState: 'rejected',
-    inFlight: false,
-    syncError: 'You chose the latest server version. Your local version remains in recovery history.',
+  await taskDb.transaction('rw', taskDb.outbox, async () => {
+    const queuedMutations = await taskDb.outbox.where('userId').equals(userId).toArray();
+    await taskDb.outbox.update(mutationId, {
+      syncState: 'rejected',
+      inFlight: false,
+      syncError: 'You chose the latest server version. Your local version remains in recovery history.',
+    });
+    // Choosing the server version resolves this chain head, not the user's
+    // later edits. Preserve those edits and make their next conditional write
+    // start from the canonical version the user just accepted.
+    await Promise.all(
+      queuedMutations
+        .filter((candidate) => candidate.id !== mutationId && candidate.syncState === 'pending' && candidate.payload.id === mutation.payload.id)
+        .filter((candidate) => !candidate.inFlight)
+        .map((candidate) => taskDb.outbox.update(candidate.id, {
+          baseUpdatedAt: mutation.canonicalTask!.updatedAt,
+        })),
+    );
   });
   return mutation.canonicalTask;
+}
+
+/**
+ * Terminal recovery history does not block a task chain. A conflict does:
+ * its later pending edits remain durable but cannot be selected until an
+ * explicit resolution turns the head back into a pending mutation or records
+ * an intentional server-version choice.
+ */
+function nextActionableMutationByTask(mutations: TaskMutation[]): Map<string, TaskMutation> {
+  const earliestByTask = new Map<string, TaskMutation>();
+  for (const mutation of [...mutations].sort((first, second) => first.createdAt - second.createdAt)) {
+    if (mutation.syncState === 'rejected' || mutation.syncState === 'synced') continue;
+    const key = mutation.payload.id ?? mutation.id;
+    if (!earliestByTask.has(key)) earliestByTask.set(key, mutation);
+  }
+  return earliestByTask;
 }
 
 async function selectDueMutations(userId: string): Promise<TaskMutation[]> {
   const now = Date.now();
   const mutations = await taskDb.outbox.where('userId').equals(userId).toArray();
-  const earliestByTask = new Map<string, TaskMutation>();
-  for (const mutation of mutations.sort((first, second) => first.createdAt - second.createdAt)) {
-    const key = mutation.payload.id ?? mutation.id;
-    if (!earliestByTask.has(key)) earliestByTask.set(key, mutation);
-  }
+  const earliestByTask = nextActionableMutationByTask(mutations);
 
   const mutationsToFlush: TaskMutation[] = [];
   await taskDb.transaction('rw', taskDb.outbox, async () => {
@@ -226,18 +247,9 @@ export async function flushTaskOutbox(
             syncError: rejection.reason,
             ...(rejection.task ? { canonicalTask: rejection.task } : {}),
           });
-          if (rejection.syncState === 'conflict') {
-            await Promise.all(
-              queuedMutations
-                .filter((candidate) => candidate.id !== mutation.id && candidate.syncState === 'pending' && candidate.payload.id === mutation.payload.id)
-                .filter((candidate) => !candidate.inFlight)
-                .map((candidate) => taskDb.outbox.update(candidate.id, {
-                  syncState: 'conflict',
-                  syncError: rejection.reason,
-                  ...(rejection.task ? { canonicalTask: rejection.task } : {}),
-                })),
-            );
-          }
+          // A conflict blocks the FIFO chain at this mutation. Later edits
+          // remain pending and durable; rewriting them to conflict would make
+          // them impossible to rebase after explicit recovery.
           return;
         }
 

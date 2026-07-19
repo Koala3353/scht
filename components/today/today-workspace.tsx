@@ -150,7 +150,14 @@ export function TodayWorkspace({
     const mutation = await reviewMutation(task, 'conflict');
     if (!mutation) return;
     const canonicalTask = await discardTaskConflict(userId, mutation.id);
-    await taskDb.tasks.put({ ...canonicalTask, userId, syncState: 'synced' });
+    const laterLocalEdit = (await taskDb.outbox.where('userId').equals(userId).toArray())
+      .some((candidate) => candidate.payload.id === task.id && candidate.syncState === 'pending');
+    // The user chose the canonical version for the conflicting edit, but a
+    // newer local edit remains queued. Keep it visible while it is rebased and
+    // sent rather than briefly replacing it with the older server snapshot.
+    await taskDb.tasks.put(laterLocalEdit
+      ? { ...task, syncState: 'pending', syncError: undefined, canonicalTask: undefined }
+      : { ...canonicalTask, userId, syncState: 'synced' });
     setReviewConfirmation(null);
     await refreshTasks();
     await synchronize();
