@@ -35,7 +35,7 @@ revoke all on schema private from public, anon, authenticated;
 drop table if exists private.bootstrap_owner;
 create table private.bootstrap_owner (
   singleton boolean primary key default true check (singleton),
-  email text not null check (email = lower(btrim(email)) and email ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'),
+  email text not null check (email = lower(btrim(email)) and email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'),
   normalized_email text generated always as (lower(btrim(email))) stored unique,
   created_at timestamptz not null default timezone('utc', now())
 );
@@ -64,7 +64,7 @@ create table public.profiles (
 
 create table public.invites (
   id uuid primary key default gen_random_uuid(),
-  email text not null check (email = btrim(email) and email ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'),
+  email text not null check (email = btrim(email) and email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'),
   normalized_email text generated always as (lower(btrim(email))) stored unique,
   role public.profile_role not null default 'member',
   invited_by uuid references public.profiles (id) on delete set null,
