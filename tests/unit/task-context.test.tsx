@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { AcademicSummary } from "../../components/grades/academic-summary";
+import { SubjectTaskQueue } from "../../components/subjects/subject-task-queue";
 import { TaskList } from "../../components/tasks/task-list";
 import { selectAgendaTasks } from "../../components/today/agenda";
 import { calendarEntries } from "../../lib/calendar/entries";
@@ -28,6 +29,8 @@ const weightedTask: TaskView = {
   source: "canvas",
   sourceId: "canvas-42",
 };
+
+afterEach(cleanup);
 
 describe("academic task context", () => {
   it("keeps a selected-term Gmail task visible in Today, Tasks, and Calendar", () => {
@@ -73,5 +76,11 @@ describe("academic task context", () => {
     expect(
       screen.getByRole("link", { name: "Open task Submit weighted reflection" }).getAttribute("href"),
     ).toBe(`/planner?task=${weightedTask.id}`);
+  });
+
+  it("shows a subject's open task on its subject-card queue", () => {
+    render(<SubjectTaskQueue tasks={[weightedTask]} />);
+
+    expect(screen.getByRole("link", { name: "Open task Submit weighted reflection" })).not.toBeNull();
   });
 });

@@ -2,10 +2,13 @@ import { PlannerWorkspace } from "@/components/planner/planner-workspace";
 import { PageHeader } from "@/components/workspace/page-header";
 import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
+import { focusedTaskId } from "@/lib/tasks/focused-task";
 import { taskColumns, toCachedTask, type TaskRow } from "@/lib/tasks/task-view";
 import { createClient } from "@/lib/supabase/server";
 
-export default async function PlannerPage() {
+type PlannerSearchParams = Promise<{ task?: string | string[] }>;
+
+export default async function PlannerPage({ searchParams }: { searchParams: PlannerSearchParams }) {
   const user = await requireUser();
   const supabase = await createClient();
   const [profileResult, tasksResult, subjectsResult, termsResult, projectsResult] = await Promise.all([
@@ -33,6 +36,8 @@ export default async function PlannerPage() {
   const subjects = requireQuery(subjectsResult, "task subjects") ?? [];
   const terms = requireQuery(termsResult, "task terms") ?? [];
   const projects = requireQuery(projectsResult, "task projects") ?? [];
+  const rawTaskId = (await searchParams).task;
+  const selectedTaskId = focusedTaskId(rawTaskId);
 
   return (
     <main>
@@ -41,6 +46,7 @@ export default async function PlannerPage() {
       </PageHeader>
       <PlannerWorkspace
         currentTermId={profile?.current_term_id ?? null}
+        focusedTaskId={selectedTaskId}
         projects={projects.map((project) => ({
           id: project.id,
           label: project.name,

@@ -36,6 +36,13 @@ const task: CachedTask = {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("PlannerWorkspace saves", () => {
+  it("opens a valid linked task directly in the shared editor", () => {
+    render(<PlannerWorkspace currentTermId={termId} focusedTaskId={task.id} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
+
+    expect(screen.getByLabelText("Description")).not.toBeNull();
+    expect(screen.getByDisplayValue("Save failure task")).not.toBeNull();
+  });
+
   it("retains a failed save for explicit retry instead of leaving a silent pending row", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
     render(<PlannerWorkspace currentTermId={termId} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);

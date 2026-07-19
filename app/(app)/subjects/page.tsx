@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/workspace/page-header";
 import { SyllabusManager } from "@/components/subjects/syllabus-manager";
+import { SubjectTaskQueue } from "@/components/subjects/subject-task-queue";
 import { SubjectUnitsEditor } from "@/components/subjects/subject-units-editor";
 import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
@@ -115,29 +116,7 @@ export default async function SubjectsPage() {
               subjectId={subject.id}
               syllabus={newestSyllabus.get(subject.id) ?? null}
             />
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <h3 className="text-sm font-bold text-ink">Open tasks</h3>
-              <ul className="mt-2 space-y-2">
-                {(openTasksBySubject.get(subject.id) ?? []).map((task) => (
-                  <li className="text-sm" key={task.id}>
-                    <a
-                      className="font-semibold text-teal underline decoration-teal/30 underline-offset-4"
-                      href={`/planner?task=${task.id}`}
-                    >
-                      {task.title}
-                    </a>
-                    {task.dueAt ? (
-                      <span className="text-slate-600">
-                        {" "}· due {new Date(task.dueAt).toLocaleDateString()}
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-                {!(openTasksBySubject.get(subject.id) ?? []).length ? (
-                  <li className="text-sm text-slate-600">No open tasks.</li>
-                ) : null}
-              </ul>
-            </div>
+            <SubjectTaskQueue tasks={openTasksBySubject.get(subject.id) ?? []} />
           </article>
         ))}
       </section>

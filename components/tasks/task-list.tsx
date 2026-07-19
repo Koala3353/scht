@@ -13,6 +13,7 @@ type TaskListProps = {
   subjects: TaskSubject[];
   projects: TaskProject[];
   onSave: (task: CachedTask, baseUpdatedAt: string | null) => void | Promise<void>;
+  initialEditingId?: string | null;
 };
 
 function relativeDue(dueAt: string | null | undefined) {
@@ -30,8 +31,8 @@ function relativeDue(dueAt: string | null | undefined) {
   return dateTime;
 }
 
-export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave }: TaskListProps) {
-  const [editing, setEditing] = useState<string | null>(null);
+export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave, initialEditingId = null }: TaskListProps) {
+  const [editing, setEditing] = useState<string | null>(initialEditingId);
   const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
   const projectLabels = new Map(projects.map((project) => [project.id, project.label]));
 
