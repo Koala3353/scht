@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
 import { taskColumns, toTaskView, type TaskRow } from "@/lib/tasks/task-view";
 import { createClient } from "@/lib/supabase/server";
+import { calculateGrade, type AssessmentResult, type GradeCategory } from "@/lib/grades/calculator";
 
 export default async function SubjectsPage() {
   const user = await requireUser();
@@ -60,6 +61,12 @@ export default async function SubjectsPage() {
         "subject tasks",
       )
     : []) ?? [];
+  const [categoriesResult, resultsResult] = await Promise.all([
+    subjects.length ? supabase.from("grade_categories").select("id, subject_id, name, weight_percent").eq("user_id", user.id).in("subject_id", subjects.map((subject) => subject.id)) : Promise.resolve({ data: [], error: null }),
+    supabase.from("assessment_results").select("category_id, score, possible_score").eq("user_id", user.id),
+  ]);
+  const categories = requireQuery(categoriesResult, "subject grade categories") ?? [];
+  const results = requireQuery(resultsResult, "subject assessment results") ?? [];
   const openTasksBySubject = new Map<string, ReturnType<typeof toTaskView>[]>();
   for (const row of taskRows as TaskRow[]) {
     const task = toTaskView(row);
@@ -108,6 +115,13 @@ export default async function SubjectsPage() {
             <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">
               Syllabus: {subject.syllabus_status}
             </p>
+            {(() => {
+              const subjectCategories = categories.filter((category) => category.subject_id === subject.id).map((category) => ({ id: category.id, name: category.name, weightPercent: Number(category.weight_percent) }) satisfies GradeCategory);
+              const subjectCategoryIds = new Set(subjectCategories.map((category) => category.id));
+              const standing = calculateGrade(subjectCategories, results.filter((result) => result.category_id && subjectCategoryIds.has(result.category_id)).map((result) => ({ categoryId: result.category_id as string, score: Number(result.score), possibleScore: Number(result.possible_score) }) satisfies AssessmentResult));
+              const approvedWeight = subjectCategories.reduce((total, category) => total + category.weightPercent, 0);
+              return <div className="mt-2 text-sm text-slate-700"><p>Approved weights: {approvedWeight}%</p><p>Current calculated standing: {standing.projectedPercent === null ? "No assessed work yet" : `${standing.projectedPercent.toFixed(2)}% projected from ${standing.gradedWeightPercent}% graded`}</p></div>;
+            })()}
             <SubjectUnitsEditor
               initialUnits={Number(subject.units)}
               subjectId={subject.id}
@@ -116,7 +130,7 @@ export default async function SubjectsPage() {
               subjectId={subject.id}
               syllabus={newestSyllabus.get(subject.id) ?? null}
             />
-            <SubjectTaskQueue tasks={openTasksBySubject.get(subject.id) ?? []} />
+            <SubjectTaskQueue approvedCategoryLabels={categories.filter((category) => category.subject_id === subject.id).map((category) => category.name)} subjectLabel={`${subject.code} · ${subject.name}`} tasks={openTasksBySubject.get(subject.id) ?? []} />
           </article>
         ))}
       </section>

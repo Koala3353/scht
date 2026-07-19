@@ -5,6 +5,7 @@ import { useToast } from "../feedback/toast-provider";
 import { TaskEditor, type TaskProject, type TaskSubject, type TaskTerm } from "@/components/tasks/task-editor";
 import { buildAiTaskPrompt } from "@/lib/ai/proposals";
 import type { CachedTask } from "@/lib/sync/types";
+import { AssignmentPrompt } from "./assignment-prompt";
 
 type Proposal = {
   id: string;
@@ -76,6 +77,8 @@ export function AiWorkbench({ userId, currentTermId, terms, subjects, projects }
     return { ...item, userId, completedAt: null, updatedAt: new Date().toISOString(), syncState: "synced", source: "ai", sourceId: null };
   }
 
+  const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
+
   return <section className="mt-6 max-w-3xl rounded-2xl border border-teal/20 bg-white p-5 shadow-sm">
     <form className="space-y-3" onSubmit={propose}>
       <label className="block text-sm font-semibold">Provider<select className="mt-1 w-full rounded-xl border border-slate-300 px-3" onChange={(event) => chooseProvider(event.target.value as "openai" | "hackclub")} value={provider}><option value="openai">OpenAI</option><option value="hackclub">Hack Club AI</option></select></label>
@@ -84,7 +87,7 @@ export function AiWorkbench({ userId, currentTermId, terms, subjects, projects }
       <label className="block text-sm font-semibold">What do you need help planning?<textarea className="mt-1 min-h-28 w-full rounded-xl border border-slate-300 p-3" maxLength={6000} onChange={(event) => setTask(event.target.value)} required value={task} /></label>
       <button className="rounded-xl bg-action px-4 py-2 font-bold text-white disabled:opacity-60" disabled={busy} type="submit">Generate proposal</button>
     </form>
-    {proposal.length > 0 && <div className="mt-5"><h2 className="font-bold">Review and edit before applying</h2><div className="mt-3 space-y-3">{proposal.map((item) => <TaskEditor currentTermId={currentTermId} key={item.id} onSave={(nextTask) => setProposal((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, ...nextTask, id: candidate.id } : candidate))} projects={projects} subjects={subjects} submitLabel="Save draft" task={asCachedTask(item)} terms={terms} />)}</div><button className="mt-4 rounded-xl border border-teal px-4 py-2 font-bold text-teal disabled:opacity-60" disabled={busy} onClick={() => void apply()} type="button">Apply reviewed tasks</button></div>}
+    {proposal.length > 0 && <div className="mt-5"><h2 className="font-bold">Review and edit before applying</h2><div className="mt-3 space-y-3">{proposal.map((item) => <div className="rounded-xl border border-slate-200 p-3" key={item.id}><AssignmentPrompt approvedCategoryLabels={[]} subjectLabel={item.subjectId ? (subjectLabels.get(item.subjectId) ?? "Not assigned") : "Not assigned"} task={asCachedTask(item)} /><TaskEditor currentTermId={currentTermId} onSave={(nextTask) => setProposal((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, ...nextTask, id: candidate.id } : candidate))} projects={projects} subjects={subjects} submitLabel="Save draft" task={asCachedTask(item)} terms={terms} /></div>)}</div><button className="mt-4 rounded-xl border border-teal px-4 py-2 font-bold text-teal disabled:opacity-60" disabled={busy} onClick={() => void apply()} type="button">Apply reviewed tasks</button></div>}
     {notice && <p className="mt-4 text-sm text-teal" role="status">{notice}</p>}
   </section>;
 }

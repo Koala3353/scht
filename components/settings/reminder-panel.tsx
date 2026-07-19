@@ -29,6 +29,9 @@ export function ReminderPanel({
   const [digestEnabled, setDigestEnabled] = useState(preference?.digest_enabled ?? false);
   const [digestFrequency, setDigestFrequency] = useState<"daily" | "weekly">(preference?.digest_frequency === "weekly" ? "weekly" : "daily");
   const [digestWindowDays, setDigestWindowDays] = useState(preference?.digest_window_days ?? 3);
+  const [timezone, setTimezone] = useState(preference?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [digestTime, setDigestTime] = useState(preference?.digest_time?.slice(0, 5) ?? "07:00");
+  const [digestWeekday, setDigestWeekday] = useState(preference?.digest_weekday ?? 1);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -41,14 +44,14 @@ export function ReminderPanel({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         enabled,
-        timezone: form.get("timezone"),
+        timezone,
         quietStart: form.get("quietStart") || null,
         quietEnd: form.get("quietEnd") || null,
         digestWindowDays,
         digestEnabled,
-        digestTime: form.get("digestTime"),
+        digestTime,
         digestFrequency,
-        digestWeekday: Number(form.get("digestWeekday") ?? preference?.digest_weekday ?? 1),
+        digestWeekday,
       }),
     });
     const body = (await response.json()) as { error?: string };
@@ -95,7 +98,7 @@ export function ReminderPanel({
         <form className="grid content-start gap-4 sm:grid-cols-2" onSubmit={save}>
           <label className="text-sm font-bold text-ink sm:col-span-2">
             Time zone
-            <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" defaultValue={preference?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone} name="timezone" required />
+            <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" name="timezone" onChange={(event) => setTimezone(event.target.value)} required value={timezone} />
           </label>
           <label className="text-sm font-bold text-ink">
             Quiet hours start
@@ -128,17 +131,17 @@ export function ReminderPanel({
                 </select>
               </label>
               <label className="block text-sm font-bold text-ink">Delivery time
-                <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" defaultValue={preference?.digest_time?.slice(0, 5) ?? "07:00"} disabled={!digestEnabled} name="digestTime" type="time" />
+                <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" disabled={!digestEnabled} name="digestTime" onChange={(event) => setDigestTime(event.target.value)} type="time" value={digestTime} />
               </label>
             </div>
             {digestFrequency === "weekly" && (
               <label className="mt-3 block text-sm font-bold text-ink">Weekly delivery day
-                <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" defaultValue={String(preference?.digest_weekday ?? 1)} disabled={!digestEnabled} name="digestWeekday">
+                <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" disabled={!digestEnabled} name="digestWeekday" onChange={(event) => setDigestWeekday(Number(event.target.value))} value={String(digestWeekday)}>
                   <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
                 </select>
               </label>
             )}
-            <p className="mt-2 text-xs font-normal leading-5 text-slate-600">Daily sends one concise outlook each day. Weekly sends one seven- or fourteen-day update on the day you choose, always in your selected time zone.</p>
+            <p className="mt-2 text-xs font-normal leading-5 text-slate-600">When opted in, your {digestFrequency} update arrives in the recipient time zone ({timezone}) at {digestTime}{digestFrequency === "weekly" ? ` on ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][digestWeekday]}.` : "."} Task horizon: the next {digestWindowDays} day{digestWindowDays === 1 ? "" : "s"} of imported and personal due work.</p>
           </div>
           <label className="flex min-h-11 items-center gap-3 rounded-xl bg-[#f7faf9] px-3 text-sm font-bold text-ink sm:col-span-2">
             <input checked={enabled} className="size-4 accent-[#075e60]" onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />

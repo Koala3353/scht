@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CheckCircle2, Pencil, RotateCcw } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
+import { AssignmentPrompt } from "../ai/assignment-prompt";
 import { TaskEditor, sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "./task-editor";
 
 type TaskListProps = {
@@ -59,7 +60,10 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
                       <div className="flex flex-wrap items-center gap-2"><h3 className={`font-bold text-ink ${task.completedAt ? "line-through text-slate-500" : ""}`}>{task.title}</h3><span className="rounded-md bg-[#e6f2f0] px-2 py-1 text-xs font-bold text-teal">{sourceLabel(task.source)}</span></div>
                       <time className={`mt-1 block text-sm font-semibold ${dueLabel.startsWith("Overdue") ? "text-action" : "text-slate-600"}`} dateTime={task.dueAt ?? undefined}>{dueLabel}</time>
                     </div>
-                    <button aria-label={`Edit ${task.title}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-ink hover:bg-slate-50" onClick={() => setEditing(task.id)} type="button"><Pencil aria-hidden="true" className="size-4" />Edit</button>
+                    <div className="flex flex-wrap items-start gap-2">
+                      {!task.completedAt ? <AssignmentPrompt approvedCategoryLabels={[]} subjectLabel={task.subjectId ? (subjectLabels.get(task.subjectId) ?? "Not assigned") : "Not assigned"} task={task} /> : null}
+                      <button aria-label={`Edit ${task.title}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-ink hover:bg-slate-50" onClick={() => setEditing(task.id)} type="button"><Pencil aria-hidden="true" className="size-4" />Edit</button>
+                    </div>
                   </div>
                   {task.description && <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">{task.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">

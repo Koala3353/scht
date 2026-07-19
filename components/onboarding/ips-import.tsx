@@ -105,7 +105,7 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
   return <section aria-labelledby="curriculum-import-heading" className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
     <p className="text-sm font-bold tracking-[.12em] text-teal">CURRICULUM IMPORT</p>
     <h2 className="mt-2 text-2xl font-bold" id="curriculum-import-heading">Preview your IPS courses</h2>
-    <p className="mt-3 text-slate-600">Your selected term is <strong>{termLabel}</strong>. Paste the tabular portion of your IPS below; nothing is saved until you import the preview.</p>
+    <p className="mt-3 text-slate-600">Active term: <strong>{termLabel}</strong>. Paste the tabular portion of your IPS below; nothing is saved until you import the reviewable preview.</p>
     <label className="mt-6 block text-sm font-semibold" htmlFor="ips-input">Paste IPS</label>
     <textarea className="mt-2 min-h-48 w-full rounded-xl border border-slate-300 p-3 font-mono text-sm" id="ips-input" onChange={(event) => setInput(event.target.value)} placeholder={'First Year\nFirst Semester\nP ENLIT 12 3 C Y N'} value={input} />
     {programYears.length > 0 && (
@@ -116,7 +116,7 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
         </select>
       </label>
     )}
-    <p aria-live="polite" className="mt-3 text-sm text-slate-600">Parsed {parsed.rows.length} course{parsed.rows.length === 1 ? '' : 's'} · {parsed.invalidLineCount} invalid line{parsed.invalidLineCount === 1 ? '' : 's'} · Showing {selectedRows.length} for Year {selectedProgramYear} · {termLabel}</p>
+    <p aria-live="polite" className="mt-3 text-sm text-slate-600">Parsed {parsed.rows.length} course{parsed.rows.length === 1 ? '' : 's'} · {parsed.invalidLineCount} invalid line{parsed.invalidLineCount === 1 ? '' : 's'} · Selected program year: Year {selectedProgramYear} · Review {selectedRows.length} item{selectedRows.length === 1 ? '' : 's'} for {termLabel} before import.</p>
     <PreviewRows rows={selectedRows} />
     <button className="mt-6 min-h-11 rounded-xl bg-orange px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={isImporting || selectedRows.length === 0} onClick={importCourses} type="button">
       {isImporting ? 'Importing…' : `Import ${selectedRows.length} courses`}

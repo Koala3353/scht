@@ -34,7 +34,7 @@ export function AcademicSummary({
       subjectCategories,
       results.filter((result) => subjectCategoryIds.has(result.categoryId)),
     );
-    return { subject, percentage: summary.projectedPercent };
+    return { subject, earnedPercent: summary.earnedPercent, gradedWeightPercent: summary.gradedWeightPercent, percentage: summary.projectedPercent };
   });
   const index = calculateAcademicIndex(
     courseGrades.map((course) => ({
@@ -141,7 +141,7 @@ export function AcademicSummary({
                   <p className="text-sm sm:self-center">
                     {course.percentage === null
                       ? "No grade yet"
-                      : `${course.percentage.toFixed(2)}%`}
+                      : <>Earned: {course.earnedPercent.toFixed(2)}%<br />Projected: {course.percentage.toFixed(2)}% ({course.gradedWeightPercent}% graded)</>}
                   </p>
                   <p className="text-right font-bold text-teal sm:self-center sm:text-left">
                     {calculated?.letter ?? "—"}
