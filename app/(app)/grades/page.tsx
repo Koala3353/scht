@@ -6,31 +6,60 @@ import {
   type GradeCategory,
 } from "@/lib/grades/calculator";
 import { requireUser } from "@/lib/auth/guards";
+import { requireQuery } from "@/lib/queries/core-page-query-error";
+import { taskColumns, toTaskView, type TaskRow } from "@/lib/tasks/task-view";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function GradesPage() {
   const user = await requireUser();
   const supabase = await createClient();
-  const { data: categories } = await supabase
-    .from("grade_categories")
-    .select("id, subject_id, name, weight_percent")
-    .eq("user_id", user.id);
-  const { data: results } = await supabase
-    .from("assessment_results")
-    .select("category_id, score, possible_score")
-    .eq("user_id", user.id);
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, code, name, units")
-    .eq("user_id", user.id)
-    .is("archived_at", null)
-    .order("code");
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("academic_scale")
-    .eq("id", user.id)
-    .maybeSingle();
-  const academicCategories = (categories ?? []).map(
+  const [categoriesResult, resultsResult, profileResult] = await Promise.all([
+    supabase
+      .from("grade_categories")
+      .select("id, subject_id, name, weight_percent")
+      .eq("user_id", user.id),
+    supabase
+      .from("assessment_results")
+      .select("category_id, score, possible_score")
+      .eq("user_id", user.id),
+    supabase
+      .from("profiles")
+      .select("academic_scale, current_term_id")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
+  const categories = requireQuery(categoriesResult, "grade categories") ?? [];
+  const results = requireQuery(resultsResult, "assessment results") ?? [];
+  const profile = requireQuery(profileResult, "grades profile");
+  const subjects = requireQuery(
+    profile?.current_term_id
+      ? await supabase
+          .from("subjects")
+          .select("id, code, name, units")
+          .eq("user_id", user.id)
+          .eq("term_id", profile.current_term_id)
+          .is("archived_at", null)
+          .order("code")
+      : { data: [], error: null },
+    "grade subjects",
+  );
+  const weightedTaskRows = subjects?.length
+    ? requireQuery(
+        await supabase
+          .from("tasks")
+          .select(taskColumns)
+          .eq("user_id", user.id)
+          .in(
+            "subject_id",
+            subjects.map((subject) => subject.id),
+          )
+          .is("completed_at", null)
+          .not("weight_percent", "is", null)
+          .order("due_at", { ascending: true, nullsFirst: false }),
+        "weighted grade tasks",
+      )
+    : [];
+  const academicCategories = categories.map(
     (item) =>
       ({
         id: item.id,
@@ -39,7 +68,7 @@ export default async function GradesPage() {
         weightPercent: Number(item.weight_percent),
       }) satisfies GradeCategory & { subjectId: string },
   );
-  const resultRows = (results ?? [])
+  const resultRows = results
     .filter((item) => item.category_id)
     .map(
       (item) =>
@@ -67,9 +96,10 @@ export default async function GradesPage() {
           ...subject,
           units: Number(subject.units),
         }))}
+        tasks={(weightedTaskRows as TaskRow[]).map(toTaskView)}
       />
       <AssessmentForm
-        categories={(categories ?? []).map((category) => ({
+        categories={categories.map((category) => ({
           ...category,
           weight_percent: Number(category.weight_percent),
         }))}

@@ -2,26 +2,35 @@ import { PageHeader } from "@/components/workspace/page-header";
 import { SyllabusManager } from "@/components/subjects/syllabus-manager";
 import { SubjectUnitsEditor } from "@/components/subjects/subject-units-editor";
 import { requireUser } from "@/lib/auth/guards";
+import { requireQuery } from "@/lib/queries/core-page-query-error";
+import { taskColumns, toTaskView, type TaskRow } from "@/lib/tasks/task-view";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function SubjectsPage() {
   const user = await requireUser();
   const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("current_term_id")
-    .eq("id", user.id)
-    .maybeSingle();
-  const { data: subjects } = profile?.current_term_id
-    ? await supabase
+  const profile = requireQuery(
+    await supabase
+      .from("profiles")
+      .select("current_term_id")
+      .eq("id", user.id)
+      .maybeSingle(),
+    "subjects profile",
+  );
+  const subjects = (profile?.current_term_id
+    ? requireQuery(
+        await supabase
         .from("subjects")
         .select("id, code, name, professor_notes, syllabus_status, units")
         .eq("term_id", profile.current_term_id)
         .is("archived_at", null)
-        .order("code")
-    : { data: [] };
-  const { data: syllabi } = subjects?.length
-    ? await supabase
+        .order("code"),
+        "subjects",
+      )
+    : []) ?? [];
+  const syllabi = (subjects.length
+    ? requireQuery(
+        await supabase
         .from("syllabi")
         .select(
           "id, subject_id, candidate_weights, validation_state, created_at",
@@ -31,8 +40,33 @@ export default async function SubjectsPage() {
           "subject_id",
           subjects.map((subject) => subject.id),
         )
-        .order("created_at", { ascending: false })
-    : { data: [] };
+        .order("created_at", { ascending: false }),
+        "subject syllabi",
+      )
+    : []) ?? [];
+  const taskRows = (subjects.length
+    ? requireQuery(
+        await supabase
+          .from("tasks")
+          .select(taskColumns)
+          .eq("user_id", user.id)
+          .in(
+            "subject_id",
+            subjects.map((subject) => subject.id),
+          )
+          .is("completed_at", null)
+          .order("due_at", { ascending: true, nullsFirst: false }),
+        "subject tasks",
+      )
+    : []) ?? [];
+  const openTasksBySubject = new Map<string, ReturnType<typeof toTaskView>[]>();
+  for (const row of taskRows as TaskRow[]) {
+    const task = toTaskView(row);
+    if (!task.subjectId) continue;
+    const queue = openTasksBySubject.get(task.subjectId) ?? [];
+    queue.push(task);
+    openTasksBySubject.set(task.subjectId, queue);
+  }
   const newestSyllabus = new Map<
     string,
     {
@@ -81,6 +115,29 @@ export default async function SubjectsPage() {
               subjectId={subject.id}
               syllabus={newestSyllabus.get(subject.id) ?? null}
             />
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <h3 className="text-sm font-bold text-ink">Open tasks</h3>
+              <ul className="mt-2 space-y-2">
+                {(openTasksBySubject.get(subject.id) ?? []).map((task) => (
+                  <li className="text-sm" key={task.id}>
+                    <a
+                      className="font-semibold text-teal underline decoration-teal/30 underline-offset-4"
+                      href={`/planner?task=${task.id}`}
+                    >
+                      {task.title}
+                    </a>
+                    {task.dueAt ? (
+                      <span className="text-slate-600">
+                        {" "}· due {new Date(task.dueAt).toLocaleDateString()}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+                {!(openTasksBySubject.get(subject.id) ?? []).length ? (
+                  <li className="text-sm text-slate-600">No open tasks.</li>
+                ) : null}
+              </ul>
+            </div>
           </article>
         ))}
       </section>

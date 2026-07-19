@@ -4,7 +4,8 @@ import {
   type AcademicScale,
   type AssessmentResult,
   type GradeCategory,
-} from "@/lib/grades/calculator";
+} from "../../lib/grades/calculator";
+import type { TaskView } from "../../lib/sync/types";
 
 type Subject = { id: string; code: string; name: string; units: number };
 type Category = GradeCategory & { subjectId: string };
@@ -14,11 +15,13 @@ export function AcademicSummary({
   subjects,
   categories,
   results,
+  tasks,
 }: {
   scale: AcademicScale;
   subjects: Subject[];
   categories: Category[];
   results: AssessmentResult[];
+  tasks: TaskView[];
 }) {
   const courseGrades = subjects.map((subject) => {
     const subjectCategories = categories.filter(
@@ -114,6 +117,26 @@ export function AcademicSummary({
                       {course.subject.units} unit
                       {course.subject.units === 1 ? "" : "s"}
                     </p>
+                    {tasks
+                      .filter(
+                        (task) =>
+                          task.subjectId === course.subject.id &&
+                          !task.completedAt &&
+                          task.weightPercent !== null,
+                      )
+                      .map((task) => (
+                        <a
+                          aria-label={`Open task ${task.title}`}
+                          className="mt-2 block text-sm font-semibold text-teal underline decoration-teal/30 underline-offset-4"
+                          href={`/planner?task=${task.id}`}
+                          key={task.id}
+                        >
+                          {task.title}
+                          {task.dueAt
+                            ? ` · due ${new Date(task.dueAt).toLocaleDateString()}`
+                            : ""}
+                        </a>
+                      ))}
                   </div>
                   <p className="text-sm sm:self-center">
                     {course.percentage === null

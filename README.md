@@ -6,7 +6,7 @@ Scht is an invite-only academic workspace for Ateneo students: one calm place fo
 
 ## What Scht does
 
-- Builds a current-term task view with offline task capture and sync.
+- Builds a current-term task view with offline task capture and sync. Offline access is limited to the loaded task workspace and queued changes; private pages and API responses are never cached by the service worker.
 - Imports an IPS curriculum, tracks subjects, and calculates Ateneo QPI or a 4.0 GPA.
 - Syncs Google Calendar events, unread Gmail follow-ups, and Canvas assignments when a student explicitly connects them.
 - Sends accessible, mobile-friendly Apps Script task reminders plus configurable daily or weekly outlook emails.

@@ -1,5 +1,5 @@
 import { test } from 'playwright/test';
 
-// The Today task editor is introduced in the following foundation task. This keeps
-// the browser-level offline contract visible without depending on that unfinished UI.
+// Keep the browser-level offline contract visible until authenticated browser fixtures
+// can create, reconnect, and verify one real synced task end to end.
 test.skip('a task created offline survives reload and syncs after reconnecting', async () => {});

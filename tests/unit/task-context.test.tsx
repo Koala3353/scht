@@ -1,0 +1,77 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
+
+import { AcademicSummary } from "../../components/grades/academic-summary";
+import { TaskList } from "../../components/tasks/task-list";
+import { selectAgendaTasks } from "../../components/today/agenda";
+import { calendarEntries } from "../../lib/calendar/entries";
+import type { CachedTask, TaskView } from "../../lib/sync/types";
+
+const termId = "f8e5cb4d-2dd4-4d63-a9d1-5af4c3b1d7f0";
+const subjectId = "451f818e-93c7-4b02-82d1-712acdf8183a";
+
+const weightedTask: TaskView = {
+  id: "f11c73a2-24b7-40ee-88fd-d7bf9a203420",
+  title: "Submit weighted reflection",
+  kind: "school",
+  dueAt: "2026-07-22T09:15:00.000Z",
+  priority: "high",
+  termId,
+  subjectId,
+  projectId: null,
+  weightPercent: 20,
+  description: "Use the lecture notes.",
+  links: [],
+  effortMinutes: 45,
+  completedAt: null,
+  updatedAt: "2026-07-19T10:00:00.000Z",
+  source: "canvas",
+  sourceId: "canvas-42",
+};
+
+describe("academic task context", () => {
+  it("keeps a selected-term Gmail task visible in Today, Tasks, and Calendar", () => {
+    const gmailTask: CachedTask = {
+      ...weightedTask,
+      source: "gmail",
+      sourceId: "gmail-10",
+      userId: "0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f",
+      syncState: "synced",
+    };
+
+    expect(selectAgendaTasks([gmailTask], termId)).toEqual([gmailTask]);
+    expect(calendarEntries([gmailTask], [])).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: `task-${gmailTask.id}`, detail: "Gmail task" }),
+      ]),
+    );
+
+    render(
+      <TaskList
+        onSave={() => undefined}
+        projects={[]}
+        subjects={[{ id: subjectId, label: "MATH 121 · Quantitative reasoning", termId }]}
+        tasks={[gmailTask]}
+        terms={[{ id: termId, label: "Fall 2026" }]}
+      />,
+    );
+
+    expect(screen.getByText("Gmail")).not.toBeNull();
+  });
+
+  it("links an incomplete weighted task beside its course grade", () => {
+    render(
+      <AcademicSummary
+        categories={[]}
+        results={[]}
+        scale="qpi"
+        subjects={[{ id: subjectId, code: "MATH 121", name: "Quantitative reasoning", units: 3 }]}
+        tasks={[weightedTask]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Open task Submit weighted reflection" }).getAttribute("href"),
+    ).toBe(`/planner?task=${weightedTask.id}`);
+  });
+});
