@@ -17,6 +17,10 @@ const scopedReferenceMigration = readFileSync(
   ),
   'utf8',
 );
+const masterReset = readFileSync(
+  path.resolve(testDirectory, '../../supabase/master_reset.sql'),
+  'utf8',
+);
 
 function policySql(name: string, table: string): string {
   const start = migration.indexOf(`create policy "${name}" on public.${table}`);
@@ -122,6 +126,39 @@ describe('row-level security migration contract', () => {
       );
       expect(scopedReferenceMigration).toContain(`create trigger ${trigger}`);
     }
+  });
+});
+
+describe('master reset row-level security contract', () => {
+  it('restores owner-aware policies and a private, one-use owner bootstrap', () => {
+    for (const table of [
+      'profiles',
+      'academic_terms',
+      'subjects',
+      'curriculum_items',
+      'tasks',
+      'projects',
+      'syllabi',
+      'grade_categories',
+      'assessment_results',
+      'calendar_events',
+      'integration_connections',
+      'encrypted_ai_vaults',
+      'reminder_preferences',
+      'reminder_queue',
+      'sync_errors',
+    ]) {
+      expect(masterReset).toContain(
+        `alter table public.${table} enable row level security;`,
+      );
+    }
+
+    expect(masterReset).toContain(
+      'create policy "users view own reminder deliveries" on public.reminder_deliveries',
+    );
+    expect(masterReset).toContain('revoke all on table private.bootstrap_owner');
+    expect(masterReset).toContain('delete from private.bootstrap_owner');
+    expect(masterReset).toContain("then 'owner_admin'::public.profile_role");
   });
 });
 

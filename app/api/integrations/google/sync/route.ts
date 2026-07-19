@@ -129,7 +129,6 @@ export async function POST() {
         ends_at: event.end?.dateTime ?? event.end?.date ?? null,
         is_all_day: Boolean(event.start?.date && !event.start?.dateTime),
         event_url: event.htmlLink ?? null,
-        raw: event,
       }));
       if (events.length) {
         const { error } = await supabase.from("calendar_events").upsert(events, { onConflict: "user_id,provider,source_id" });

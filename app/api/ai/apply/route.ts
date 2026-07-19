@@ -16,8 +16,9 @@ export async function POST(request: Request) {
   const parsedRequest = ApplyRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsedRequest.success) return NextResponse.json({ error: 'Every AI write requires reviewed, valid task details.' }, { status: 400 });
   const { conversationId, tasks } = parsedRequest.data;
-  const { data: conversation } = await supabase.from('ai_conversations').select('id').eq('id', conversationId).eq('user_id', user.id).is('applied_at', null).maybeSingle();
-  if (!conversation) return NextResponse.json({ error: 'Proposal is unavailable or was already applied.' }, { status: 404 });
+  // The proposal is intentionally not retained. Requiring a UUID preserves a
+  // request correlation value while each explicit, reviewed submit creates tasks.
+  void conversationId;
   const { data: profile } = await supabase.from('profiles').select('current_term_id').eq('id', user.id).maybeSingle();
   const selectedTermId = profile?.current_term_id ?? null;
   const subjectIds = [...new Set(tasks.flatMap((task) => task.subjectId ? [task.subjectId] : []))];
@@ -46,6 +47,5 @@ export async function POST(request: Request) {
   }));
   const { error } = await supabase.from('tasks').upsert(rows, { onConflict: 'id' });
   if (error) return NextResponse.json({ error: error.message }, { status: 502 });
-  await supabase.from('ai_conversations').update({ applied_at: new Date().toISOString() }).eq('id', conversation.id);
   return NextResponse.json({ applied: rows.length });
 }

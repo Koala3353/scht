@@ -42,6 +42,8 @@ Google sync also needs `INTEGRATION_ENCRYPTION_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, a
 
 Apply every SQL migration in `supabase/migrations`—including `0008_reminder_email_digest.sql`, `0009_projects_and_daily_digests.sql`, `0010_digest_cadence.sql`, and `0011_ai_connected_data_privacy.sql`—before inviting users. Full, copyable deployment instructions are in [SETUP.md](SETUP.md).
 
+For a deliberately destructive fresh-deployment reset, use the reviewed, manual [master reset guide](supabase/MASTER_RESET.md). It is not a migration and must never be run without a verified Supabase backup and a manually replaced owner bootstrap email.
+
 ## Production checklist
 
 1. Set the Vercel production domain to `https://scht-admu.vercel.app`.

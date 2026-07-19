@@ -80,19 +80,8 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
-    const { data: conversation, error } = await supabase
-      .from("ai_conversations")
-      .insert({
-        user_id: user.id,
-        provider: body.provider,
-        messages: [{ role: "user", content: body.prompt }],
-        proposal,
-      })
-      .select("id, proposal")
-      .single();
-    return error
-      ? NextResponse.json({ error: error.message }, { status: 502 })
-      : NextResponse.json(conversation);
+    // Proposals are deliberately ephemeral: only user-reviewed task rows are stored.
+    return NextResponse.json({ id: crypto.randomUUID(), proposal });
   } catch {
     return NextResponse.json(
       {
