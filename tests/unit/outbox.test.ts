@@ -40,7 +40,7 @@ vi.mock('../../lib/sync/db', () => ({
   },
 }));
 
-import { discardTaskConflict, enqueueTaskMutation, flushTaskOutbox, resolveTaskConflict, retryTaskOutbox } from '../../lib/sync/outbox';
+import { discardTaskConflict, enqueueTaskMutation, flushTaskOutbox, resolveRejectedTaskMutation, resolveTaskConflict, retryTaskOutbox } from '../../lib/sync/outbox';
 
 const validTask = {
   title: 'Write reflection',
@@ -248,6 +248,46 @@ describe('task mutation outbox', () => {
     await flushTaskOutbox(userId, async (mutations) => {
       expect(mutations.map((mutation) => mutation.id)).toEqual(['m2']);
       return { accepted: [{ id: 'm2', task: { ...serverTask, title: 'Second local edit', updatedAt: '2026-07-19T13:00:00.000Z' } }], rejected: [] };
+    });
+    expect(outbox.size).toBe(0);
+  });
+
+  it('blocks later edits behind a rejected change until its correction is accepted and rebased', async () => {
+    const serverTask = {
+      id: taskId,
+      title: 'Corrected first edit',
+      kind: 'school' as const,
+      priority: 'normal' as const,
+      description: 'Corrected context',
+      links: [],
+      updatedAt: '2026-07-19T12:00:00.000Z',
+      source: 'manual',
+      sourceId: null,
+    };
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'Rejected first edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z', createdAt: 1 });
+    await enqueueTaskMutation({ id: 'm2', userId, operation: 'upsert', payload: { ...validTask, id: taskId, title: 'Later edit' }, baseUpdatedAt: '2026-07-19T09:00:00.000Z', createdAt: 2 });
+
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m1']);
+      return { accepted: [], rejected: [{ id: 'm1', reason: 'Description is required.', syncState: 'rejected' }] };
+    });
+    expect(outbox.get('m1')).toMatchObject({ syncState: 'rejected' });
+
+    const blockedFetcher = vi.fn(async () => ({ accepted: [], rejected: [] }));
+    await flushTaskOutbox(userId, blockedFetcher);
+    expect(blockedFetcher).not.toHaveBeenCalled();
+
+    await resolveRejectedTaskMutation(userId, 'm1', { ...validTask, id: taskId, title: 'Corrected first edit', description: 'Corrected context' });
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m1']);
+      expect(mutations[0].payload).toMatchObject({ title: 'Corrected first edit', description: 'Corrected context' });
+      return { accepted: [{ id: 'm1', task: serverTask }], rejected: [] };
+    });
+
+    expect(outbox.get('m2')).toMatchObject({ syncState: 'pending', baseUpdatedAt: serverTask.updatedAt });
+    await flushTaskOutbox(userId, async (mutations) => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m2']);
+      return { accepted: [{ id: 'm2', task: { ...serverTask, title: 'Later edit', updatedAt: '2026-07-19T13:00:00.000Z' } }], rejected: [] };
     });
     expect(outbox.size).toBe(0);
   });

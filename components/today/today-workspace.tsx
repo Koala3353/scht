@@ -7,7 +7,8 @@ import { Agenda, selectAgendaTasks } from "./agenda";
 import { FocusCard, chooseFocusTask } from "./focus-card";
 import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "../tasks/task-types";
 import { taskDb } from "../../lib/sync/db";
-import { discardTaskConflict, enqueueTaskMutation, flushTaskOutbox, resolveTaskConflict, retryRejectedTaskMutation, retryTaskOutbox } from "../../lib/sync/outbox";
+import { discardTaskConflict, discardTaskRecovery, enqueueTaskMutation, flushTaskOutbox, resolveRejectedTaskMutation, resolveTaskConflict, retryRejectedTaskMutation, retryTaskOutbox } from "../../lib/sync/outbox";
+import type { TaskInput } from "../../lib/validation/task";
 import type {
   CachedTask,
   TaskMutation,
@@ -57,6 +58,7 @@ export function TodayWorkspace({
   const [syncState, setSyncState] = useState<SyncState>("Synced");
   const [title, setTitle] = useState("");
   const [reviewConfirmation, setReviewConfirmation] = useState<string | null>(null);
+  const [rejectedEditor, setRejectedEditor] = useState<{ mutation: TaskMutation; task: CachedTask } | null>(null);
   const retryTimer = useRef<number | undefined>(undefined);
   const agendaTasks = useMemo(
     () => (selectedTermId ? selectAgendaTasks(tasks, selectedTermId) : []),
@@ -168,6 +170,100 @@ export function TodayWorkspace({
     if (!mutation) return;
     await retryRejectedTaskMutation(userId, mutation.id);
     await taskDb.tasks.update(task.id, { syncState: 'pending', syncError: undefined });
+    await refreshTasks();
+    await synchronize();
+  }
+
+  async function openRejectedEditor(task: CachedTask) {
+    const mutation = await reviewMutation(task, 'rejected');
+    if (mutation) setRejectedEditor({ mutation, task });
+  }
+
+  async function resubmitRejectedTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!rejectedEditor) return;
+    const form = new FormData(event.currentTarget);
+    const title = String(form.get('recovery-title') ?? '').trim();
+    if (!title) return;
+    const dueAt = String(form.get('recovery-due-at') ?? '');
+    const nullableId = (name: string) => {
+      const value = String(form.get(name) ?? '').trim();
+      return value || null;
+    };
+    const resolvedTask: TaskInput = {
+      ...rejectedEditor.mutation.payload,
+      title,
+      kind: String(form.get('recovery-kind')) as TaskInput['kind'],
+      dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+      priority: String(form.get('recovery-priority')) as TaskInput['priority'],
+      description: String(form.get('recovery-description') ?? ''),
+      termId: nullableId('recovery-term-id'),
+      subjectId: nullableId('recovery-subject-id'),
+      projectId: nullableId('recovery-project-id'),
+    };
+    await resolveRejectedTaskMutation(userId, rejectedEditor.mutation.id, resolvedTask);
+    const hasLaterEdit = (await taskDb.outbox.where('userId').equals(userId).toArray())
+      .some((candidate) => candidate.id !== rejectedEditor.mutation.id && candidate.payload.id === rejectedEditor.task.id && candidate.syncState === 'pending');
+    await taskDb.tasks.update(rejectedEditor.task.id, hasLaterEdit
+      ? { syncState: 'pending', syncError: undefined, canonicalTask: undefined }
+      : { ...resolvedTask, syncState: 'pending', syncError: undefined, canonicalTask: undefined });
+    setRejectedEditor(null);
+    await refreshTasks();
+    await synchronize();
+  }
+
+  async function unavailableRecoveryMutation(task: CachedTask) {
+    return (await taskDb.outbox.where('userId').equals(userId).toArray())
+      .find((mutation) => mutation.payload.id === task.id && !mutation.canonicalTask && !mutation.recoveryResolved && (mutation.syncState === 'conflict' || mutation.syncState === 'rejected'));
+  }
+
+  async function discardUnavailableTask(task: CachedTask) {
+    const mutation = await unavailableRecoveryMutation(task);
+    if (!mutation) return;
+    await discardTaskRecovery(userId, mutation.id);
+    const hasLaterEdit = (await taskDb.outbox.where('userId').equals(userId).toArray())
+      .some((candidate) => candidate.id !== mutation.id && candidate.payload.id === task.id && candidate.syncState === 'pending');
+    if (hasLaterEdit) {
+      await taskDb.tasks.update(task.id, { syncState: 'pending', syncError: undefined, canonicalTask: undefined });
+    } else {
+      await taskDb.tasks.delete(task.id);
+    }
+    setReviewConfirmation(null);
+    await refreshTasks();
+    await synchronize();
+  }
+
+  async function recreateUnavailableTask(task: CachedTask) {
+    const mutation = await unavailableRecoveryMutation(task);
+    if (!mutation) return;
+    await discardTaskRecovery(userId, mutation.id);
+    const now = new Date().toISOString();
+    const recreatedTask: CachedTask = {
+      ...task,
+      ...mutation.payload,
+      id: newTaskId(),
+      userId,
+      updatedAt: now,
+      syncState: 'pending',
+      syncError: undefined,
+      canonicalTask: undefined,
+    };
+    await taskDb.tasks.put(recreatedTask);
+    await enqueueTaskMutation({
+      id: newTaskId(),
+      userId,
+      operation: 'upsert',
+      payload: { ...mutation.payload, id: recreatedTask.id },
+      baseUpdatedAt: null,
+    });
+    const hasLaterEdit = (await taskDb.outbox.where('userId').equals(userId).toArray())
+      .some((candidate) => candidate.id !== mutation.id && candidate.payload.id === task.id && candidate.syncState === 'pending');
+    if (hasLaterEdit) {
+      await taskDb.tasks.update(task.id, { syncState: 'pending', syncError: undefined, canonicalTask: undefined });
+    } else {
+      await taskDb.tasks.delete(task.id);
+    }
+    setReviewConfirmation(null);
     await refreshTasks();
     await synchronize();
   }
@@ -316,7 +412,39 @@ export function TodayWorkspace({
           <p className="text-sm font-semibold text-action">Sync review required</p>
           <h2 className="mt-1 text-xl font-black tracking-tight">{task.title}</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">{task.syncError ?? 'This saved change needs your decision before it can sync.'}</p>
-          {task.syncState === 'conflict' ? (
+          {!task.canonicalTask ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm leading-6 text-slate-700">The server task is no longer available, so there is no version to merge with.</p>
+              {reviewConfirmation === `discard:${task.id}` ? (
+                <div className="rounded-xl border border-action/30 bg-white p-4">
+                  <p className="text-sm font-semibold text-ink">Discard this saved local change? This cannot be undone.</p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white" onClick={() => void discardUnavailableTask(task)} type="button">Confirm discard local change</button>
+                    <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setReviewConfirmation(null)} type="button">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="min-h-11 rounded-xl border border-action px-4 py-2 text-sm font-bold text-action" onClick={() => setReviewConfirmation(`discard:${task.id}`)} type="button">Discard local change</button>
+              )}
+              {reviewConfirmation === `recreate:${task.id}` ? (
+                <div className="rounded-xl border border-action/30 bg-white p-4">
+                  <p className="text-sm font-semibold text-ink">Create this saved change as a new task? The missing task will not be restored.</p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <button className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white" onClick={() => void recreateUnavailableTask(task)} type="button">Confirm recreate as new task</button>
+                    <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setReviewConfirmation(null)} type="button">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setReviewConfirmation(`recreate:${task.id}`)} type="button">Recreate as new task</button>
+              )}
+              {task.syncState === 'rejected' && (
+                <div className="flex flex-wrap gap-3">
+                  <button className="min-h-11 rounded-xl border border-action px-4 py-2 text-sm font-bold text-action" onClick={() => void retryRejectedTask(task)} type="button">Retry saved change</button>
+                  <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => void openRejectedEditor(task)} type="button">Edit and resubmit</button>
+                </div>
+              )}
+            </div>
+          ) : task.syncState === 'conflict' ? (
             <div className="mt-4 space-y-3">
               {reviewConfirmation === `keep:${task.id}` ? (
                 <div className="rounded-xl border border-action/30 bg-white p-4">
@@ -342,10 +470,50 @@ export function TodayWorkspace({
               )}
             </div>
           ) : (
-            <button className="mt-4 min-h-11 rounded-xl border border-action px-4 py-2 text-sm font-bold text-action" onClick={() => void retryRejectedTask(task)} type="button">Retry saved change</button>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button className="min-h-11 rounded-xl border border-action px-4 py-2 text-sm font-bold text-action" onClick={() => void retryRejectedTask(task)} type="button">Retry saved change</button>
+              <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => void openRejectedEditor(task)} type="button">Edit and resubmit</button>
+            </div>
           )}
         </section>
       ))}
+
+      {rejectedEditor && (
+        <div aria-labelledby="recovery-editor-title" aria-modal="true" className="mt-6 rounded-[1.5rem] border border-action/30 bg-white p-5 shadow-sm sm:p-6" role="dialog">
+          <h2 className="text-xl font-black tracking-tight" id="recovery-editor-title">Edit and resubmit saved change</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-700">Update the rejected fields, then explicitly resubmit this saved change. Later edits stay queued until it is accepted.</p>
+          <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={resubmitRejectedTask}>
+            <label className="grid gap-1 text-sm font-bold text-ink sm:col-span-2">Title
+              <input className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.title} name="recovery-title" required />
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink">Due date and time
+              <input className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.dueAt?.slice(0, 16) ?? ''} name="recovery-due-at" type="datetime-local" />
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink">Priority
+              <select className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.priority} name="recovery-priority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select>
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink">Kind
+              <select className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.kind} name="recovery-kind"><option value="school">School</option><option value="work">Work</option><option value="personal">Personal</option></select>
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink">Term ID
+              <input className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.termId ?? ''} name="recovery-term-id" />
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink">Subject ID
+              <input className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.subjectId ?? ''} name="recovery-subject-id" />
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink">Project ID
+              <input className="rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.projectId ?? ''} name="recovery-project-id" />
+            </label>
+            <label className="grid gap-1 text-sm font-bold text-ink sm:col-span-2">Description
+              <textarea className="min-h-24 rounded-xl border border-slate-300 px-3 py-2" defaultValue={rejectedEditor.mutation.payload.description} name="recovery-description" />
+            </label>
+            <div className="flex flex-wrap gap-3 sm:col-span-2">
+              <button className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white" type="submit">Resubmit saved change</button>
+              <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={() => setRejectedEditor(null)} type="button">Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.8fr)]">
         <FocusCard task={focusTask} />

@@ -33,13 +33,15 @@ export interface TaskMutation {
   inFlight?: boolean;
   syncError?: string;
   canonicalTask?: TaskView;
+  /** A user explicitly completed a no-server-version recovery decision. */
+  recoveryResolved?: boolean;
 }
 
 export type TaskMutationInput = Pick<
   TaskMutation,
   'id' | 'userId' | 'operation' | 'payload' | 'baseUpdatedAt'
 > &
-  Partial<Pick<TaskMutation, 'createdAt' | 'attempts' | 'nextAttemptAt' | 'syncState' | 'syncError'>>;
+  Partial<Pick<TaskMutation, 'createdAt' | 'attempts' | 'nextAttemptAt' | 'syncState' | 'syncError' | 'recoveryResolved'>>;
 
 export interface RejectedTaskMutation {
   id: string;

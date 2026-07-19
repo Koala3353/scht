@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -87,5 +87,49 @@ describe('TodayWorkspace sync review controls', () => {
     render(<TodayWorkspace initialTasks={[task({ syncState: 'rejected', syncError: 'Save rejected.' })]} selectedTermId={termId} userId={userId} />);
 
     expect(screen.getByRole('button', { name: 'Retry saved change' })).not.toBeNull();
+  });
+
+  it('lets a rejected saved change be edited and explicitly resubmitted', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [] }) })));
+    const rejected = task({ syncState: 'rejected', syncError: 'Description is required.', description: '' });
+    outbox.set('m1', { id: 'm1', userId, operation: 'upsert', payload: rejected, baseUpdatedAt: rejected.updatedAt, createdAt: 1, attempts: 0, nextAttemptAt: 0, syncState: 'rejected' });
+    const view = render(<TodayWorkspace initialTasks={[rejected]} selectedTermId={termId} userId={userId} />);
+    const workspace = within(view.container);
+
+    await userEvent.click(workspace.getByRole('button', { name: 'Edit and resubmit' }));
+    expect(workspace.getByRole('dialog', { name: 'Edit and resubmit saved change' })).not.toBeNull();
+    const title = workspace.getByLabelText('Title');
+    await userEvent.clear(title);
+    await userEvent.type(title, 'Corrected task title');
+    await userEvent.type(workspace.getByLabelText('Description'), 'Required context');
+    await userEvent.click(workspace.getByRole('button', { name: 'Resubmit saved change' }));
+
+    await waitFor(() => expect(outbox.get('m1')).toMatchObject({
+      syncState: 'pending',
+      payload: expect.objectContaining({ title: 'Corrected task title', description: 'Required context' }),
+    }));
+    vi.unstubAllGlobals();
+  });
+
+  it('offers confirmed discard or recreate recovery when the server task is missing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [] }) })));
+    const missing = task({ syncState: 'conflict', syncError: 'This task changed on another device.' });
+    outbox.set('m1', { id: 'm1', userId, operation: 'upsert', payload: missing, baseUpdatedAt: missing.updatedAt, createdAt: 1, attempts: 0, nextAttemptAt: 0, syncState: 'conflict' });
+    const view = render(<TodayWorkspace initialTasks={[missing]} selectedTermId={termId} userId={userId} />);
+    const workspace = within(view.container);
+
+    expect(workspace.getByRole('button', { name: 'Discard local change' })).not.toBeNull();
+    expect(workspace.getByRole('button', { name: 'Recreate as new task' })).not.toBeNull();
+    expect(workspace.queryByRole('button', { name: 'Keep my version' })).toBeNull();
+    expect(workspace.queryByRole('button', { name: 'Use latest server version' })).toBeNull();
+
+    await userEvent.click(workspace.getByRole('button', { name: 'Recreate as new task' }));
+    expect(workspace.getByRole('button', { name: 'Confirm recreate as new task' })).not.toBeNull();
+    await userEvent.click(workspace.getByRole('button', { name: 'Confirm recreate as new task' }));
+    await waitFor(() => expect([...outbox.values()]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ baseUpdatedAt: null, syncState: 'pending', payload: expect.objectContaining({ id: expect.any(String) }) }),
+    ])));
+    expect(outbox.get('m1')).toMatchObject({ recoveryResolved: true });
+    vi.unstubAllGlobals();
   });
 });

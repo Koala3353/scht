@@ -120,14 +120,70 @@ export async function resolveTaskConflict(
  */
 export async function retryRejectedTaskMutation(userId: string, mutationId: string): Promise<void> {
   const mutation = await taskDb.outbox.get(mutationId);
-  if (!mutation || mutation.userId !== userId || mutation.syncState !== 'rejected' || mutation.inFlight) {
+  if (!mutation || mutation.userId !== userId || mutation.syncState !== 'rejected' || mutation.inFlight || mutation.recoveryResolved) {
     throw new Error('This saved change is not available to retry.');
   }
 
   await taskDb.outbox.update(mutationId, {
     syncState: 'pending',
     syncError: undefined,
+    recoveryResolved: undefined,
     nextAttemptAt: Date.now(),
+  });
+}
+
+/**
+ * A rejected mutation can be corrected without discarding its FIFO position.
+ * This is intentionally distinct from retry: the caller has explicitly edited
+ * the saved payload that the server rejected.
+ */
+export async function resolveRejectedTaskMutation(
+  userId: string,
+  mutationId: string,
+  resolvedTask: TaskInput,
+): Promise<void> {
+  const mutation = await taskDb.outbox.get(mutationId);
+  if (
+    !mutation ||
+    mutation.userId !== userId ||
+    mutation.syncState !== 'rejected' ||
+    mutation.inFlight ||
+    mutation.recoveryResolved ||
+    resolvedTask.id !== mutation.payload.id
+  ) {
+    throw new Error('Edit the saved change that needs recovery first.');
+  }
+
+  await taskDb.outbox.update(mutationId, {
+    payload: resolvedTask,
+    syncState: 'pending',
+    syncError: undefined,
+    recoveryResolved: undefined,
+    nextAttemptAt: Date.now(),
+  });
+}
+
+/**
+ * A remote deletion has no canonical task to merge against. The user can
+ * explicitly discard that saved change, which unblocks later durable edits
+ * without pretending a missing server version exists.
+ */
+export async function discardTaskRecovery(userId: string, mutationId: string): Promise<void> {
+  const mutation = await taskDb.outbox.get(mutationId);
+  if (
+    !mutation ||
+    mutation.userId !== userId ||
+    mutation.inFlight ||
+    mutation.canonicalTask ||
+    (mutation.syncState !== 'conflict' && mutation.syncState !== 'rejected')
+  ) {
+    throw new Error('This saved change is not available to discard.');
+  }
+
+  await taskDb.outbox.update(mutationId, {
+    recoveryResolved: true,
+    inFlight: false,
+    syncError: 'You discarded this saved change because its server task is no longer available.',
   });
 }
 
@@ -146,6 +202,7 @@ export async function discardTaskConflict(userId: string, mutationId: string): P
     await taskDb.outbox.update(mutationId, {
       syncState: 'rejected',
       inFlight: false,
+      recoveryResolved: true,
       syncError: 'You chose the latest server version. Your local version remains in recovery history.',
     });
     // Choosing the server version resolves this chain head, not the user's
@@ -164,15 +221,14 @@ export async function discardTaskConflict(userId: string, mutationId: string): P
 }
 
 /**
- * Terminal recovery history does not block a task chain. A conflict does:
- * its later pending edits remain durable but cannot be selected until an
- * explicit resolution turns the head back into a pending mutation or records
- * an intentional server-version choice.
+ * Every unresolved terminal rejection and conflict remains the FIFO head for
+ * a task. Later edits stay durable but cannot pass it. Explicit recovery may
+ * either re-enable that head or mark it as resolved recovery history.
  */
 function nextActionableMutationByTask(mutations: TaskMutation[]): Map<string, TaskMutation> {
   const earliestByTask = new Map<string, TaskMutation>();
   for (const mutation of [...mutations].sort((first, second) => first.createdAt - second.createdAt)) {
-    if (mutation.syncState === 'rejected' || mutation.syncState === 'synced') continue;
+    if (mutation.syncState === 'synced' || (mutation.syncState === 'rejected' && mutation.recoveryResolved)) continue;
     const key = mutation.payload.id ?? mutation.id;
     if (!earliestByTask.has(key)) earliestByTask.set(key, mutation);
   }
@@ -204,7 +260,7 @@ async function selectDueMutations(userId: string): Promise<TaskMutation[]> {
       }
 
       // Revalidate that this is still the FIFO head for its task. A conflict
-      // remains a blocking head, while terminal recovery history does not.
+      // or unresolved rejection remains a blocking head.
       const currentMutations = await taskDb.outbox.where('userId').equals(userId).toArray();
       const taskKey = mutation.payload.id ?? mutation.id;
       if (nextActionableMutationByTask(currentMutations).get(taskKey)?.id !== mutation.id) continue;
@@ -266,6 +322,7 @@ export async function flushTaskOutbox(
             syncState: rejection.syncState,
             inFlight: false,
             syncError: rejection.reason,
+            recoveryResolved: undefined,
             ...(rejection.task ? { canonicalTask: rejection.task } : {}),
           });
           // A conflict blocks the FIFO chain at this mutation. Later edits
