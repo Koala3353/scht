@@ -20,8 +20,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       .from("tasks")
       .select(taskColumns)
       .eq("user_id", user.id)
-      .order("due_at", { ascending: true, nullsFirst: false })
-      .limit(200),
+      .order("due_at", { ascending: true, nullsFirst: false }),
     supabase.from("subjects").select("id, term_id, code, name").eq("user_id", user.id),
     supabase
       .from("academic_terms")

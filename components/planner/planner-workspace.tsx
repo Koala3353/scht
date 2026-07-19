@@ -35,7 +35,9 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
     userId,
     initialTasks,
     currentTermId,
-    pruneMissingSnapshot: true,
+    // Planner's server result is paged by the provider and may not be a full
+    // account snapshot; never prune a durable cache row from that projection.
+    pruneMissingSnapshot: false,
   });
   const [source, setSource] = useState("all");
   const [priority, setPriority] = useState("all");
@@ -90,6 +92,6 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
     </div>
     <div className="mt-5"><TaskList approvedCategoryLabelsBySubject={approvedCategoryLabelsBySubject} currentTermId={currentTermId} initialEditingId={focusedTaskId} onSave={saveTask} projects={projects} subjects={subjects} tasks={visible} terms={terms} /></div>
     {(saveFailure || syncState === "Sync failed") && <section className="mt-5 rounded-xl border border-action/30 bg-[#fff8f3] p-4 text-sm text-slate-700" role="status"><p className="font-semibold text-action">{saveFailure?.reason ?? "Task sync failed. Retry this saved change."}</p><div className="mt-3 flex flex-wrap gap-3"><button className="min-h-11 rounded-xl border border-action px-4 py-2 font-bold text-action" onClick={() => void retrySynchronization()} type="button">Retry saved change</button>{saveFailure?.canonicalTask && <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 font-bold text-ink" onClick={() => { const canonicalTask = { ...saveFailure.canonicalTask!, userId: saveFailure.task.userId, syncState: "synced" as const }; setTasks((current) => current.map((candidate) => candidate.id === canonicalTask.id ? canonicalTask : candidate)); setSaveFailure(null); }} type="button">Use latest server version</button>}</div></section>}
-    <div className="mt-8"><WorkManager initialProjects={projects.map((item) => ({ id: item.id, name: item.label, status: item.status }))} onTaskProjectChange={(assignedTask) => setTasks((current) => current.map((task) => task.id === assignedTask.id ? { ...task, projectId: assignedTask.projectId, updatedAt: assignedTask.updatedAt } : task))} tasks={tasks.filter((task) => !task.completedAt).map((task) => ({ id: task.id, title: task.title, projectId: task.projectId ?? null, dueAt: task.dueAt ?? null }))} /></div>
+    <div className="mt-8"><WorkManager initialProjects={projects.map((item) => ({ id: item.id, name: item.label, status: item.status }))} onSaveTask={saveTask} tasks={tasks.filter((task) => !task.completedAt)} /></div>
   </section>;
 }

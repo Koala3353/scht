@@ -35,3 +35,24 @@ Fixed the three Important findings in the final review only: shared local-first 
 - No direct task-sync POST remains outside the shared client service.
 - Canvas preserves existing rows rather than attempting provider-field updates, which intentionally prioritizes user edits and canonical revision safety.
 - No schema, master-reset SQL, protected untracked instructions, or fixture directories were changed.
+
+## Second final-review fix wave
+
+### RED evidence
+
+- Project assignment bypassed the shared local-first task flow through `/api/projects`, so it had neither an outbox mutation nor conditional task revision.
+- Planner fetched only 200 tasks while treating the response as safe to prune cached task rows.
+- Canvas used a read-then-insert sequence, allowing two automatic page refreshes to race into a duplicate-key failure.
+
+### GREEN implementation and regressions
+
+- `WorkManager` now sends the full canonical task and `updatedAt` base revision to Planner's shared task save callback. `/api/projects` retains only project lifecycle mutations. Planner coverage proves project assignment creates a shared task mutation, remains cached/outboxed offline, and retains a conflict for review.
+- Planner no longer limits the server task query and explicitly disables pruning from its non-authoritative projection. The >200 partial-snapshot regression keeps a synced cached task beyond the first 200 rows.
+- Canvas now uses atomic `upsert(..., { onConflict: "user_id,source,source_id", ignoreDuplicates: true })`, which maps to conflict-ignore behavior and returns only rows inserted by that request. The concurrent-refresh regression verifies both requests return 200 and count one insert total.
+
+### Second-wave final verification
+
+- `npm run test` — 38 files passed, 127 tests passed, 2 skipped.
+- `npm run lint` — passed.
+- `npm run build` — passed.
+- `npm run test:e2e` — 4 fixture-gated tests skipped; no failures.

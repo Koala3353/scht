@@ -4,12 +4,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useToast } from "../feedback/toast-provider";
 import { Archive, FolderPlus, Save } from "lucide-react";
 import { useRouter } from "next/navigation";
+import type { CachedTask } from "../../lib/sync/types";
 
 type Project = { id: string; name: string; status: "active" | "archived" };
-type Task = { id: string; title: string; projectId: string | null; dueAt: string | null };
-type AssignedTask = { id: string; projectId: string | null; updatedAt: string };
 
-export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { initialProjects: Project[]; tasks: Task[]; onTaskProjectChange?: (task: AssignedTask) => void }) {
+export function WorkManager({ initialProjects, tasks, onSaveTask }: { initialProjects: Project[]; tasks: CachedTask[]; onSaveTask: (task: CachedTask, baseUpdatedAt: string | null) => Promise<void> }) {
   const router = useRouter();
   const { toast } = useToast();
   const [projects, setProjects] = useState(initialProjects);
@@ -24,7 +23,7 @@ export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { i
 
   async function request(method: "POST" | "PATCH", body: Record<string, unknown>) {
     const response = await fetch("/api/projects", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const result = await response.json() as { error?: string; project?: Project; task?: AssignedTask };
+    const result = await response.json() as { error?: string; project?: Project };
     if (!response.ok) throw new Error(result.error ?? "Could not save the project.");
     return result;
   }
@@ -45,9 +44,9 @@ export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { i
     setBusy(false);
   }
 
-  async function assign(taskId: string, projectId: string) {
+  async function assign(task: CachedTask, projectId: string) {
     setBusy(true); setNotice("");
-    try { const nextProjectId = projectId || null; const result = await request("PATCH", { taskId, projectId: nextProjectId }); if (result.task) onTaskProjectChange?.(result.task); setNotice("Task project updated."); router.refresh(); }
+    try { await onSaveTask({ ...task, projectId: projectId || null }, task.updatedAt); setNotice("Task project saved locally."); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Could not update the task."); }
     setBusy(false);
   }
@@ -59,7 +58,7 @@ export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { i
       <form className="mt-5 flex gap-2" onSubmit={create}><label className="sr-only" htmlFor="project-name">Project name</label><input className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-ink" id="project-name" maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="e.g. Org recruitment" required value={name} /><button className="min-h-11 rounded-xl bg-teal px-4 font-bold text-white disabled:opacity-60" disabled={busy} type="submit">Add</button></form>
       <div className="mt-5 space-y-3">{activeProjects.map((project) => <ProjectEditor busy={busy} key={project.id} onArchive={() => void update(project.id, { status: "archived" })} onSave={(nextName) => void update(project.id, { name: nextName })} project={project} />)}{!activeProjects.length && <p className="rounded-xl bg-[#f7faf9] p-4 text-sm text-slate-700">Create a project, then attach the work that belongs to it.</p>}</div>
     </div>
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><p className="text-sm font-semibold text-teal">Open tasks</p><h2 className="mt-1 text-xl font-black">Place each task.</h2><p className="mt-2 text-sm leading-6 text-slate-700">Task assignment is optional. Unassigned tasks stay in your planner and Today view.</p><ul className="mt-5 space-y-3">{tasks.map((task) => <li className="rounded-xl border border-slate-200 p-3" key={task.id}><p className="font-bold text-ink">{task.title}</p><div className="mt-3 flex items-center gap-2"><label className="sr-only" htmlFor={`project-for-${task.id}`}>Project for {task.title}</label><select className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm text-ink" defaultValue={task.projectId ?? ""} disabled={busy} id={`project-for-${task.id}`} onChange={(event) => void assign(task.id, event.target.value)}><option value="">No project</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>{task.dueAt && <time className="text-xs font-semibold text-slate-600">{new Date(task.dueAt).toLocaleDateString()}</time>}</div></li>)}{!tasks.length && <li className="rounded-xl bg-[#f7faf9] p-4 text-sm text-slate-700">No open tasks to assign.</li>}</ul></div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><p className="text-sm font-semibold text-teal">Open tasks</p><h2 className="mt-1 text-xl font-black">Place each task.</h2><p className="mt-2 text-sm leading-6 text-slate-700">Task assignment is optional. Unassigned tasks stay in your planner and Today view.</p><ul className="mt-5 space-y-3">{tasks.map((task) => <li className="rounded-xl border border-slate-200 p-3" key={task.id}><p className="font-bold text-ink">{task.title}</p><div className="mt-3 flex items-center gap-2"><label className="sr-only" htmlFor={`project-for-${task.id}`}>Project for {task.title}</label><select className="min-h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 text-sm text-ink" value={task.projectId ?? ""} disabled={busy} id={`project-for-${task.id}`} onChange={(event) => void assign(task, event.target.value)}><option value="">No project</option>{activeProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>{task.dueAt && <time className="text-xs font-semibold text-slate-600">{new Date(task.dueAt).toLocaleDateString()}</time>}</div></li>)}{!tasks.length && <li className="rounded-xl bg-[#f7faf9] p-4 text-sm text-slate-700">No open tasks to assign.</li>}</ul></div>
     {notice && <p className="lg:col-span-2 rounded-xl bg-[#e6f2f0] px-4 py-3 text-sm font-semibold text-teal" role="status">{notice}</p>}
   </section>;
 }

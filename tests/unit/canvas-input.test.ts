@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   canvasApi: vi.fn(),
   decryptCredentials: vi.fn(),
   encryptCredentials: vi.fn(),
-  tasksInsert: vi.fn(),
+  tasksUpsert: vi.fn(),
 }));
 
 vi.mock("../../lib/supabase/server", () => ({ createClient: mocks.createClient }));
@@ -44,14 +44,9 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
   profileQuery.eq.mockReturnValue(profileQuery);
   const mutation = (error: boolean) => ({ select: vi.fn(async () => ({ data: error ? null : [{ id: "saved" }], error: error ? { message: "database down" } : null })) });
   const subjectMutation = (error: boolean) => ({ select: vi.fn(async () => ({ data: error ? null : [{ id: "saved", canvas_course_id: "42" }], error: error ? { message: "database down" } : null })) });
-  const existingTasksQuery = {
-    eq: vi.fn(),
-    in: vi.fn(async () => ({ data: existingSourceIds.map((source_id) => ({ source_id })), error: null })),
-  };
-  existingTasksQuery.eq.mockReturnValue(existingTasksQuery);
+  const ignoredDuplicateMutation = { select: vi.fn(async () => ({ data: [], error: null })) };
   const tasksTable = {
-    select: vi.fn(() => existingTasksQuery),
-    insert: mocks.tasksInsert.mockImplementation(() => mutation(errorAt === "tasks")),
+    upsert: mocks.tasksUpsert.mockImplementation(() => existingSourceIds.length ? ignoredDuplicateMutation : mutation(errorAt === "tasks")),
   };
   mocks.createClient.mockResolvedValue({
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },
@@ -122,6 +117,19 @@ describe("Canvas sync persistence", () => {
     expect(body).toMatchObject({ assignments: 0 });
     // The import never writes an existing source identity, so its description,
     // deadline, project, completion state, and canonical revision stay intact.
-    expect(mocks.tasksInsert).not.toHaveBeenCalled();
+    expect(mocks.tasksUpsert).toHaveBeenCalledWith(expect.any(Array), { onConflict: "user_id,source,source_id", ignoreDuplicates: true });
+  });
+
+  it("does not turn a duplicate concurrent source into a Canvas sync failure", async () => {
+    setupSync(null);
+    let insertAttempt = 0;
+    mocks.tasksUpsert.mockImplementation(() => ({ select: vi.fn(async () => ({ data: insertAttempt++ === 0 ? [{ id: "saved" }] : [], error: null })) }));
+
+    const [first, second] = await Promise.all([POST(syncRequest()), POST(syncRequest())]);
+    const [firstBody, secondBody] = await Promise.all([first.json(), second.json()]);
+
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(firstBody.assignments + secondBody.assignments).toBe(1);
+    expect(mocks.tasksUpsert).toHaveBeenCalledTimes(2);
   });
 });

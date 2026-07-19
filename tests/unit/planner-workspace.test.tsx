@@ -27,7 +27,7 @@ vi.mock("../../lib/sync/db", () => ({
 }));
 
 vi.mock("../../components/work/work-manager", () => ({
-  WorkManager: ({ tasks, onTaskProjectChange }: { tasks: Array<{ id: string }>; onTaskProjectChange?: (task: { id: string; projectId: string | null; updatedAt: string }) => void }) => <button onClick={() => onTaskProjectChange?.({ id: tasks[0]?.id ?? "", projectId, updatedAt: "2026-07-19T11:00:00.000Z" })} type="button">Assign task to Capstone</button>,
+  WorkManager: ({ tasks, onSaveTask }: { tasks: CachedTask[]; onSaveTask: (task: CachedTask, baseUpdatedAt: string | null) => Promise<void> }) => <button onClick={() => { const currentTask = tasks[0]; if (currentTask) void onSaveTask({ ...currentTask, projectId }, currentTask.updatedAt); }} type="button">Assign task to Capstone</button>,
 }));
 
 import { PlannerWorkspace } from "../../components/planner/planner-workspace";
@@ -92,7 +92,7 @@ describe("PlannerWorkspace saves", () => {
     expect(screen.getByRole("button", { name: "Retry saved change" })).not.toBeNull();
   });
 
-  it("applies a direct assignment revision before the next task edit", async () => {
+  it("queues a project assignment through the shared task mutation with its revision", async () => {
     const fetchMock = vi.fn(async (_url: string, options: RequestInit) => {
       const mutation = (JSON.parse(String(options.body)) as { mutations: Array<{ id: string }> }).mutations[0]!;
       return { ok: true, json: async () => ({ accepted: [{ id: mutation.id, task: { ...task, projectId, updatedAt: "2026-07-19T11:00:00.000Z" } }], rejected: [] }) };
@@ -101,17 +101,30 @@ describe("PlannerWorkspace saves", () => {
     render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
     const user = userEvent.setup();
 
-    await user.selectOptions(screen.getByLabelText("Project"), projectId);
-    expect(screen.queryByText("Save failure task")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Assign task to Capstone" }));
 
-    expect(screen.getByText("Save failure task")).not.toBeNull();
-    expect(screen.getAllByText("Capstone").length).toBeGreaterThan(1);
-    await user.click(screen.getByRole("button", { name: "Edit Save failure task" }));
-    await user.click(screen.getByRole("button", { name: "Save task" }));
-
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { mutations: Array<{ baseUpdatedAt: string | null }> };
-    expect(request.mutations[0]?.baseUpdatedAt).toBe("2026-07-19T11:00:00.000Z");
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { mutations: Array<{ baseUpdatedAt: string | null; payload: CachedTask }> };
+    expect(request.mutations[0]?.baseUpdatedAt).toBe(task.updatedAt);
+    expect(request.mutations[0]?.payload.projectId).toBe(projectId);
+  });
+
+  it("retains an offline project assignment in the task cache and outbox", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
+    render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Assign task to Capstone" }));
+
+    await waitFor(() => expect(cachedTasks.get(task.id)).toMatchObject({ projectId, syncState: "pending" }));
+    expect([...queuedMutations.values()]).toEqual([expect.objectContaining({ userId, payload: expect.objectContaining({ id: task.id, projectId }) })]);
+  });
+
+  it("surfaces a project assignment conflict without losing the durable task edit", async () => {
+    vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("assignment-mutation");
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [{ id: "assignment-mutation", taskId: task.id, reason: "This task changed on another device.", syncState: "conflict", task: { ...task, updatedAt: "2026-07-19T11:00:01.000Z" } }] }) })));
+    render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Assign task to Capstone" }));
+
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("This task changed on another device."));
+    expect([...queuedMutations.values()]).toEqual([expect.objectContaining({ syncState: "conflict", payload: expect.objectContaining({ projectId }) })]);
   });
 });

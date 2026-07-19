@@ -16,10 +16,8 @@ export async function POST(request: Request) {
   return error ? NextResponse.json({ error: error.message }, { status: 502 }) : NextResponse.json({ project: data }, { status: 201 });
 }
 
-const mutationSchema = z.union([
-  z.object({ projectId, name: projectName.optional(), status: status.optional() }).refine((value) => value.name || value.status, "Choose a project change."),
-  z.object({ taskId: z.string().uuid(), projectId: projectId.nullable() }),
-]);
+const mutationSchema = z.object({ projectId, name: projectName.optional(), status: status.optional() })
+  .refine((value) => value.name || value.status, "Choose a project change.");
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -28,19 +26,6 @@ export async function PATCH(request: Request) {
   const parsed = mutationSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Use a valid project or task selection." }, { status: 400 });
   const body = parsed.data;
-
-  if ("taskId" in body) {
-    if (body.projectId) {
-      const { data: project } = await supabase.from("projects").select("id").eq("id", body.projectId).eq("user_id", user.id).maybeSingle();
-      if (!project) return NextResponse.json({ error: "Project not found." }, { status: 404 });
-    }
-    const { data: task } = await supabase.from("tasks").select("id").eq("id", body.taskId).eq("user_id", user.id).maybeSingle();
-    if (!task) return NextResponse.json({ error: "Task not found." }, { status: 404 });
-    const { data, error } = await supabase.from("tasks").update({ project_id: body.projectId }).eq("id", body.taskId).eq("user_id", user.id).select("id, project_id, updated_at").maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 502 });
-    if (!data) return NextResponse.json({ error: "Task not found." }, { status: 404 });
-    return NextResponse.json({ task: { id: data.id, projectId: data.project_id, updatedAt: data.updated_at } });
-  }
 
   const changes = { ...(body.name ? { name: body.name } : {}), ...(body.status ? { status: body.status } : {}) };
   const { data, error } = await supabase.from("projects").update(changes).eq("id", body.projectId).eq("user_id", user.id).select("id, name, status").maybeSingle();

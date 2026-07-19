@@ -44,6 +44,15 @@ describe('mergeTaskSnapshot', () => {
     expect(mergeTaskSnapshot([local], [], userId, termId)).toEqual([local]);
   });
 
+  it('does not prune the 201st synced current-term task from a partial Planner snapshot', () => {
+    const snapshot = Array.from({ length: 200 }, (_, index) => task({ id: `server-${index}` }));
+    const cachedBeyondPage = task({ id: 'cached-beyond-page' });
+
+    expect(mergeTaskSnapshot([cachedBeyondPage], snapshot, userId, termId, false)).toEqual(
+      expect.arrayContaining([cachedBeyondPage]),
+    );
+  });
+
   it('filters rows to the active user', () => {
     const otherUserTask = task({ userId: '5184ae1a-fc5a-4724-b2b9-0bd0e0669cad' });
 
