@@ -1,11 +1,20 @@
 begin;
 
 -- MANUAL OPERATOR ACTION ONLY. Do not apply this file as a migration.
--- It preserves Supabase Auth and every non-Scht Storage bucket, but deletes
--- every Scht public row and every object in the private `syllabi` bucket.
+-- It preserves Supabase Auth and every non-Scht Storage bucket. Empty the
+-- private `syllabi` bucket through the Storage API or Dashboard before running
+-- this query; direct SQL deletes are blocked to prevent orphaned objects.
 do $$
 begin
-  raise warning 'DESTRUCTIVE Scht reset: deleting all Scht public data and all objects in the syllabi bucket. Supabase Auth and non-Scht Storage buckets are preserved.';
+  raise warning 'DESTRUCTIVE Scht reset: deleting all Scht public data. The syllabi bucket must already be empty through the Storage API or Dashboard. Supabase Auth and non-Scht Storage buckets are preserved.';
+end;
+$$;
+
+do $$
+begin
+  if exists (select 1 from storage.objects where bucket_id = 'syllabi') then
+    raise exception 'The syllabi bucket is not empty. Empty it through the Supabase Storage API or Dashboard, then rerun this reset.';
+  end if;
 end;
 $$;
 
@@ -14,7 +23,6 @@ drop policy if exists "users upload own syllabi" on storage.objects;
 drop policy if exists "users read own syllabi" on storage.objects;
 drop policy if exists "users update own syllabi" on storage.objects;
 drop policy if exists "users delete own syllabi" on storage.objects;
-delete from storage.objects where bucket_id = 'syllabi';
 
 drop schema public cascade;
 create schema public;

@@ -2,15 +2,16 @@
 
 `master_reset.sql` is a fresh-deployment/reset artifact, not a migration. It is intentionally destructive and has not been executed by this repository.
 
-It removes every Scht row in `public`, the one-time owner bootstrap entry, and every object in the `syllabi` Storage bucket. It preserves Supabase Auth users and all non-Scht Storage buckets. It does not delete the `syllabi` bucket itself; it makes that bucket private again and restores its owner-scoped policies.
+It removes every Scht row in `public` and the one-time owner bootstrap entry. It preserves Supabase Auth users and all Storage buckets. Before you run it, empty every object in the `syllabi` bucket through the Supabase Dashboard or Storage API. The reset verifies that the bucket is empty and stops before changing the database if it is not. It does not delete the `syllabi` bucket itself; it makes that bucket private again and restores its owner-scoped policies.
 
 Before doing anything, create and verify a Supabase database backup. Also export any syllabus files or workspace data you need. There is no recovery path in this script.
 
 ## Required preparation
 
-1. Choose a **new Auth email address** for the first owner. Auth users are preserved by the reset, so an email that already has an Auth account will not fire the signup trigger and cannot consume the bootstrap entry.
-2. Open `supabase/master_reset.sql` locally. Replace the literal `REPLACE_WITH_OWNER_EMAIL@example.com` with that exact lowercase email address. Do not leave the placeholder in place.
-3. Review the complete file, especially the warning and `begin;`/`commit;` boundary. This script deletes data; it is not part of normal migration deployment.
+1. Empty the `syllabi` bucket with **Storage → `syllabi` → Empty bucket** in the Supabase Dashboard, or with the Storage API using a service-role key. Do not run `DELETE FROM storage.objects` in SQL: Supabase blocks it because it would orphan the actual files. The reset query will stop safely if even one object remains.
+2. Choose a **new Auth email address** for the first owner. Auth users are preserved by the reset, so an email that already has an Auth account will not fire the signup trigger and cannot consume the bootstrap entry.
+3. Open `supabase/master_reset.sql` locally. Replace the literal `REPLACE_WITH_OWNER_EMAIL@example.com` with that exact lowercase email address. Do not leave the placeholder in place.
+4. Review the complete file, especially the warning and `begin;`/`commit;` boundary. This script deletes data; it is not part of normal migration deployment.
 
 ## Supabase Dashboard SQL Editor
 

@@ -22,8 +22,9 @@ describe("master reset schema contract", () => {
     expect(reset).toContain("destructive");
     expect(reset).toContain("drop schema public cascade");
     expect(reset).toContain("create schema public");
-    expect(reset).toContain("delete from storage.objects");
+    expect(reset).not.toContain("delete from storage.objects");
     expect(reset).toContain("bucket_id = 'syllabi'");
+    expect(reset).toContain("the syllabi bucket is not empty");
   });
 
   it("recreates the compact Scht model with user isolation and supporting indexes", () => {
