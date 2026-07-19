@@ -17,7 +17,7 @@ describe("IntegrationsPanel", () => {
     renderPanel({ status: "connected", last_synced_at: "2026-07-19T08:00:00.000Z", error_message: null });
 
     expect(screen.getByText("Connected")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Reconnect Google" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Reconnect Google" })).toBeNull();
     expect((screen.getByRole("button", { name: "Sync now" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -35,5 +35,23 @@ describe("IntegrationsPanel", () => {
     expect(screen.getByText(/Connected securely to canvas\.example\.edu./)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Sync assignments" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByLabelText("Personal API token (enter only to replace)") as HTMLInputElement).value).toBe("");
+  });
+
+  it("keeps Google sync available and renders one provider result for a degraded Gmail refresh", () => {
+    renderPanel({
+      status: "connected",
+      last_synced_at: "2026-07-19T08:00:00.000Z",
+      error_message: null,
+      settings: {
+        sync: {
+          calendar: { state: "synced", imported: 2, message: "2 Calendar events imported." },
+          gmail: { state: "degraded", imported: 0, message: "Gmail is temporarily rate-limited. Your Calendar update is safe; try Gmail again after 2 minutes." },
+        },
+      },
+    });
+
+    expect((screen.getByRole("button", { name: "Retry Gmail" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getAllByText(/Gmail is temporarily rate-limited/)).toHaveLength(1);
+    expect(screen.queryByRole("link", { name: "Reconnect Google" })).toBeNull();
   });
 });

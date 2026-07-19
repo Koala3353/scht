@@ -13,6 +13,29 @@ type IntegrationConnection = {
   settings?: unknown;
 } | null;
 
+type ServiceResult = { state: "synced" | "degraded" | "needs_reauth"; imported: number; message: string };
+type GoogleSyncResult = { calendar: ServiceResult; gmail: ServiceResult };
+
+function settingsRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function isServiceResult(value: unknown): value is ServiceResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (record.state === "synced" || record.state === "degraded" || record.state === "needs_reauth")
+    && typeof record.imported === "number"
+    && typeof record.message === "string";
+}
+
+function googleSyncResult(value: unknown): GoogleSyncResult | null {
+  const record = settingsRecord(value);
+  const sync = settingsRecord(record.sync);
+  return isServiceResult(sync.calendar) && isServiceResult(sync.gmail)
+    ? { calendar: sync.calendar, gmail: sync.gmail }
+    : null;
+}
+
 async function responseBody(response: Response) {
   return (await response.json().catch(() => ({}))) as {
     error?: string;
@@ -20,6 +43,8 @@ async function responseBody(response: Response) {
     assignments?: number;
     calendarEvents?: number;
     gmailTasks?: number;
+    calendar?: ServiceResult;
+    gmail?: ServiceResult;
   };
 }
 
@@ -34,7 +59,11 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
   const [busy, setBusy] = useState(false);
   const googleConnected = googleConnection?.status === "connected";
   const canvasConnected = canvasConnection?.status === "connected";
-  const canvasBaseUrl = canvasConnection?.settings && typeof canvasConnection.settings === "object" && "baseUrl" in canvasConnection.settings && typeof canvasConnection.settings.baseUrl === "string" ? canvasConnection.settings.baseUrl : null;
+  const googleSync = googleSyncResult(googleConnection?.settings);
+  const googleNeedsReconnect = googleConnection?.status === "error" || googleSync?.calendar.state === "needs_reauth" || googleSync?.gmail.state === "needs_reauth";
+  const googleRetrying = googleSync?.calendar.state === "degraded" || googleSync?.gmail.state === "degraded";
+  const configuredCanvasBaseUrl = settingsRecord(canvasConnection?.settings).baseUrl;
+  const canvasBaseUrl = typeof configuredCanvasBaseUrl === "string" ? configuredCanvasBaseUrl : null;
   const canvasHost = canvasBaseUrl ? new URL(canvasBaseUrl).host : null;
 
   function updateNotice(next: Notice) {
@@ -78,24 +107,29 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
       return;
     }
     setBusy(true);
-    updateNotice(null);
     try {
       const response = await fetch("/api/integrations/google/sync", { method: "POST" });
       const body = await responseBody(response);
       if (!response.ok) {
         setGoogleConnection((current) => current ? { ...current, status: "error", error_message: body.error ?? "Google sync failed." } : current);
-        updateNotice({ kind: "error", text: body.error ?? "Google sync failed." });
         return;
       }
+      if (!body.calendar || !body.gmail) {
+        setGoogleConnection((current) => current ? { ...current, status: "error", error_message: "Google returned an incomplete sync result." } : current);
+        return;
+      }
+      const result: GoogleSyncResult = { calendar: body.calendar, gmail: body.gmail };
+      const needsReauth = result.calendar.state === "needs_reauth" || result.gmail.state === "needs_reauth";
+      const fullySynced = result.calendar.state === "synced" && result.gmail.state === "synced";
       setGoogleConnection((current) => ({
         ...current,
-        status: "connected",
-        last_synced_at: new Date().toISOString(),
-        error_message: null,
+        status: needsReauth ? "error" : "connected",
+        last_synced_at: fullySynced ? new Date().toISOString() : current?.last_synced_at ?? null,
+        error_message: needsReauth ? (result.calendar.state === "needs_reauth" ? result.calendar.message : result.gmail.message) : null,
+        settings: { ...settingsRecord(current?.settings), sync: result },
       }));
-      updateNotice({ kind: "success", text: "Google sync complete. " + (body.calendarEvents ?? 0) + " calendar events and " + (body.gmailTasks ?? 0) + " Gmail tasks imported." });
     } catch {
-      updateNotice({ kind: "error", text: "Google could not be reached. Check your connection and try again." });
+      setGoogleConnection((current) => current ? { ...current, status: "error", error_message: "Google could not be reached. Check your connection and try again." } : current);
     } finally {
       setBusy(false);
       router.refresh();
@@ -139,11 +173,11 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
               ? "Google is linked. Sync whenever you want to refresh upcoming Calendar events and unread Gmail review tasks."
               : "Pull upcoming events into Calendar and unread message subjects into reviewable planner tasks when you choose to sync."}
           </p>
-          {googleConnected && googleConnection?.last_synced_at && <p className="mt-3 text-sm font-semibold text-[#bfe0d8]">Last synced {new Date(googleConnection.last_synced_at).toLocaleString()}.</p>}
-          {googleConnection?.status === "error" && googleConnection.error_message && <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]">{googleConnection.error_message}</p>}
+          {(googleConnection?.last_synced_at || googleSync) && <p className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold leading-6 text-[#d7ebe7]" role={googleNeedsReconnect ? "alert" : "status"}>{googleConnection?.last_synced_at ? `Last successful sync ${new Date(googleConnection.last_synced_at).toLocaleString()}. ` : ""}{googleSync ? <>Calendar: {googleSync.calendar.message} Gmail: {googleSync.gmail.message}</> : "Google sync complete."}</p>}
+          {googleConnection?.status === "error" && googleConnection.error_message && !googleSync && <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]" role="alert">{googleConnection.error_message}</p>}
           <div className="mt-7 flex flex-wrap gap-3">
-            <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnection ? "Reconnect Google" : "Connect Google"}</a>
-            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/25 px-4 py-2 font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !googleConnected} onClick={() => void syncGoogle()} type="button"><RefreshCw className="size-4" aria-hidden="true" />{busy ? "Syncing…" : "Sync now"}</button>
+            {(!googleConnected || googleNeedsReconnect) && <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnection ? "Reconnect Google" : "Connect Google"}</a>}
+            <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/25 px-4 py-2 font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !googleConnected} onClick={() => void syncGoogle()} type="button"><RefreshCw className="size-4" aria-hidden="true" />{busy ? "Syncing…" : googleRetrying ? "Retry Gmail" : "Sync now"}</button>
           </div>
         </article>
 

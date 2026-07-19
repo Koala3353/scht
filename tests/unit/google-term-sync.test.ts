@@ -56,6 +56,6 @@ describe("Google sync", () => {
     expect(response.status).toBe(200);
     expect(mocks.tasksUpsert).toHaveBeenCalledWith(expect.arrayContaining([
       expect.objectContaining({ source: "gmail", term_id: termId }),
-    ]), { onConflict: "user_id,source,source_id" });
+    ]), { onConflict: "user_id,source,source_id", ignoreDuplicates: true });
   });
 });

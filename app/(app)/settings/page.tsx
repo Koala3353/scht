@@ -6,6 +6,11 @@ import { ReminderPanel } from "@/components/settings/reminder-panel";
 import { SettingsNavigation } from "@/components/settings/settings-navigation";
 import { requireUser } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
+import { z } from "zod";
+
+const settingsSearchParamsSchema = z.object({
+  integration: z.enum(["google-connected", "google-error"]).optional(),
+});
 
 export default async function SettingsPage({
   searchParams,
@@ -13,6 +18,7 @@ export default async function SettingsPage({
   searchParams: Promise<{ integration?: string }>
 }) {
   const params = await searchParams;
+  const integration = settingsSearchParamsSchema.safeParse(params).data?.integration;
   const user = await requireUser();
   const supabase = await createClient();
   const [{ data: preference }, { data: tasks }, { data: profile }, { data: connections }] =
@@ -59,12 +65,12 @@ export default async function SettingsPage({
       <div className="mt-8 max-w-6xl">
         <SettingsNavigation />
         <div className="mt-8 space-y-10">
-          {params.integration === "google-connected" && (
+          {integration === "google-connected" && (
             <p className="rounded-xl border border-teal/20 bg-[#e6f2f0] px-4 py-3 text-sm font-semibold text-teal" role="status">
               Google connected. Select Sync now to import your Calendar events and unread Gmail items.
             </p>
           )}
-          {params.integration === "google-error" && (
+          {integration === "google-error" && (
             <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert">
               Google could not connect. Confirm your Google test-user access, Google provider credentials, and the Supabase sign-in callback, then try again.
             </p>
