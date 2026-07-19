@@ -177,6 +177,12 @@ Upload a syllabus from a subject card. Text-based files have candidate grade wei
 
 In Settings, save an OpenAI or Hack Club AI key through **Encrypted AI key vault** with a passphrase of at least 12 characters. It is encrypted in the browser using PBKDF2 plus AES-GCM before being stored. The AI workbench requires an unlocked key for each proposal and does not write tasks until the user explicitly applies the reviewed result.
 
+### Ateneo QPI and GPA
+
+Migration `0007_academic_scale_and_subject_units.sql` adds the academic-scale preference and course-unit field. After applying it, set each subject’s units from the Subjects page. Scht defaults to **Ateneo QPI** and uses the units-weighted formula: the quality-point equivalent of every graded subject multiplied by its course units, divided by the total counted units. In Settings, select **4.0 GPA** to use the same unit weighting with a percentage-to-4.0 estimate instead.
+
+The QPI percentage cutoffs are an estimate based on an [Ateneo QPI calculator](https://qpi.alexi.life/) and an [Ateneo course grading table](https://aisis.ateneo.edu/syllabi/2022/1/CS-MA-MATH199.11-TOLENTINO_M_DAVID_R_BENITO_D-T1-2022-1.pdf); always defer to your instructor’s or school’s current grading policy. Only subjects with at least one recorded assessment are counted.
+
 ### Reminder delivery
 
 After deploying to Vercel, set Apps Script properties as follows:
@@ -196,18 +202,18 @@ Set every variable above in Vercel for the environments that use the correspondi
 
 Copy `.env.example` to `.env.local`, then configure every entry as follows. Keep `.env.local` out of Git.
 
-| Variable | What to enter | Required for |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL, such as `https://<project-ref>.supabase.co`. | Always. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | The public `sb_publishable_...` key from Supabase API Keys. Use this **or** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. | Always. |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same public key, using Supabase’s current variable name. Leave `NEXT_PUBLIC_SUPABASE_ANON_KEY` empty when using this form. | Always, as an alternative to the anonymous-key name. |
-| `SUPABASE_SERVICE_ROLE_KEY` | The server-side `service_role` key from Supabase API Keys. Never expose it to the browser or commit it. | Owner exports, reminder dispatch, and local demo login. |
-| `NEXT_PUBLIC_APP_URL` | `http://localhost:3001` locally; the exact Vercel URL in each deployed environment. | Auth redirects and provider callbacks. |
-| `INTEGRATION_ENCRYPTION_KEY` | A base64-encoded 32-byte random key. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. | Canvas and Google token encryption. |
-| `GOOGLE_OAUTH_CLIENT_ID` | The Web OAuth client ID from Google Cloud—the same client configured in Supabase’s Google provider. | Refreshing Google Calendar/Gmail connections. |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | The matching Web OAuth client secret from Google Cloud. | Refreshing Google Calendar/Gmail connections. |
-| `REMINDER_DISPATCH_TOKEN` | A long random shared secret, for example `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Configure the same value as Apps Script’s `SCHT_REMINDER_TOKEN`. | Protected Apps Script reminder delivery. |
-| `HACK_CLUB_AI_BASE_URL` | Leave as `https://ai.hackclub.com/v1` unless Hack Club provides a replacement endpoint. | Hack Club AI provider. |
+| Variable                               | What to enter                                                                                                                                                                         | Required for                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Your Supabase project URL, such as `https://<project-ref>.supabase.co`.                                                                                                               | Always.                                                 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | The public `sb_publishable_...` key from Supabase API Keys. Use this **or** `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.                                                                   | Always.                                                 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | The same public key, using Supabase’s current variable name. Leave `NEXT_PUBLIC_SUPABASE_ANON_KEY` empty when using this form.                                                        | Always, as an alternative to the anonymous-key name.    |
+| `SUPABASE_SERVICE_ROLE_KEY`            | The server-side `service_role` key from Supabase API Keys. Never expose it to the browser or commit it.                                                                               | Owner exports, reminder dispatch, and local demo login. |
+| `NEXT_PUBLIC_APP_URL`                  | `http://localhost:3001` locally; the exact Vercel URL in each deployed environment.                                                                                                   | Auth redirects and provider callbacks.                  |
+| `INTEGRATION_ENCRYPTION_KEY`           | A base64-encoded 32-byte random key. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.                                                     | Canvas and Google token encryption.                     |
+| `GOOGLE_OAUTH_CLIENT_ID`               | The Web OAuth client ID from Google Cloud—the same client configured in Supabase’s Google provider.                                                                                   | Refreshing Google Calendar/Gmail connections.           |
+| `GOOGLE_OAUTH_CLIENT_SECRET`           | The matching Web OAuth client secret from Google Cloud.                                                                                                                               | Refreshing Google Calendar/Gmail connections.           |
+| `REMINDER_DISPATCH_TOKEN`              | A long random shared secret, for example `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Configure the same value as Apps Script’s `SCHT_REMINDER_TOKEN`. | Protected Apps Script reminder delivery.                |
+| `HACK_CLUB_AI_BASE_URL`                | Leave as `https://ai.hackclub.com/v1` unless Hack Club provides a replacement endpoint.                                                                                               | Hack Club AI provider.                                  |
 
 ### Local demo sign-in
 
