@@ -1,6 +1,6 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CachedTask } from '../../lib/sync/types';
 
@@ -63,6 +63,11 @@ function task(overrides: Partial<CachedTask> = {}): CachedTask {
 }
 
 describe('TodayWorkspace sync review controls', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     tasks.clear();
     outbox.clear();
@@ -97,12 +102,14 @@ describe('TodayWorkspace sync review controls', () => {
     const workspace = within(view.container);
 
     await userEvent.click(workspace.getByRole('button', { name: 'Edit and resubmit' }));
-    expect(workspace.getByRole('dialog', { name: 'Edit and resubmit saved change' })).not.toBeNull();
-    const title = workspace.getByLabelText('Title');
+    const dialog = workspace.getByRole('dialog', { name: 'Edit and resubmit saved change' });
+    expect(dialog).not.toBeNull();
+    const recoveryEditor = within(dialog);
+    const title = recoveryEditor.getByLabelText('Title');
     await userEvent.clear(title);
     await userEvent.type(title, 'Corrected task title');
-    await userEvent.type(workspace.getByLabelText('Description'), 'Required context');
-    await userEvent.click(workspace.getByRole('button', { name: 'Resubmit saved change' }));
+    await userEvent.type(recoveryEditor.getByLabelText('Description'), 'Required context');
+    await userEvent.click(recoveryEditor.getByRole('button', { name: 'Resubmit saved change' }));
 
     await waitFor(() => expect(outbox.get('m1')).toMatchObject({
       syncState: 'pending',
@@ -130,6 +137,23 @@ describe('TodayWorkspace sync review controls', () => {
       expect.objectContaining({ baseUpdatedAt: null, syncState: 'pending', payload: expect.objectContaining({ id: expect.any(String) }) }),
     ])));
     expect(outbox.get('m1')).toMatchObject({ recoveryResolved: true });
+    vi.unstubAllGlobals();
+  });
+
+  it('queues a fresh manual capture as a create mutation without a server revision', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [] }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<TodayWorkspace initialTasks={[]} selectedTermId={termId} userId={userId} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save task' }));
+
+    await waitFor(() => expect([...outbox.values()]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ baseUpdatedAt: null, payload: expect.objectContaining({ title: 'New task' }) }),
+    ])));
+    await waitFor(() => {
+      const createRequest = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)) as { mutations?: Array<{ baseUpdatedAt: string | null }> }).find((body) => body.mutations?.length);
+      expect(createRequest?.mutations?.[0]?.baseUpdatedAt).toBeNull();
+    });
     vi.unstubAllGlobals();
   });
 });

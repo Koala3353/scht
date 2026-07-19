@@ -13,6 +13,8 @@ export type TaskEditorProps = {
   currentTermId?: string | null;
   /** Only fresh manual capture should inherit the selected current term. */
   defaultToCurrentTerm?: boolean;
+  /** `null` identifies a fresh task that must be created rather than conditionally updated. */
+  baseUpdatedAt?: string | null;
   terms: TaskTerm[];
   subjects: TaskSubject[];
   projects: TaskProject[];
@@ -36,6 +38,7 @@ export function TaskEditor({
   task,
   currentTermId = null,
   defaultToCurrentTerm = false,
+  baseUpdatedAt,
   terms,
   subjects,
   projects,
@@ -78,7 +81,7 @@ export function TaskEditor({
     if (!nextTask.title) return;
     setSaving(true);
     try {
-      await onSave(nextTask, task.updatedAt || null);
+      await onSave(nextTask, baseUpdatedAt === undefined ? task.updatedAt ?? null : baseUpdatedAt);
     } finally {
       setSaving(false);
     }

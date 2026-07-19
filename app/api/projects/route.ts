@@ -36,8 +36,10 @@ export async function PATCH(request: Request) {
     }
     const { data: task } = await supabase.from("tasks").select("id").eq("id", body.taskId).eq("user_id", user.id).maybeSingle();
     if (!task) return NextResponse.json({ error: "Task not found." }, { status: 404 });
-    const { error } = await supabase.from("tasks").update({ project_id: body.projectId }).eq("id", body.taskId).eq("user_id", user.id);
-    return error ? NextResponse.json({ error: error.message }, { status: 502 }) : NextResponse.json({ saved: true });
+    const { data, error } = await supabase.from("tasks").update({ project_id: body.projectId }).eq("id", body.taskId).eq("user_id", user.id).select("id, project_id, updated_at").maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 502 });
+    if (!data) return NextResponse.json({ error: "Task not found." }, { status: 404 });
+    return NextResponse.json({ task: { id: data.id, projectId: data.project_id, updatedAt: data.updated_at } });
   }
 
   const changes = { ...(body.name ? { name: body.name } : {}), ...(body.status ? { status: body.status } : {}) };

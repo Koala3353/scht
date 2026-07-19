@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 
 type Project = { id: string; name: string; status: "active" | "archived" };
 type Task = { id: string; title: string; projectId: string | null; dueAt: string | null };
+type AssignedTask = { id: string; projectId: string | null; updatedAt: string };
 
-export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { initialProjects: Project[]; tasks: Task[]; onTaskProjectChange?: (taskId: string, projectId: string | null) => void }) {
+export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { initialProjects: Project[]; tasks: Task[]; onTaskProjectChange?: (task: AssignedTask) => void }) {
   const router = useRouter();
   const { toast } = useToast();
   const [projects, setProjects] = useState(initialProjects);
@@ -23,7 +24,7 @@ export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { i
 
   async function request(method: "POST" | "PATCH", body: Record<string, unknown>) {
     const response = await fetch("/api/projects", { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const result = await response.json() as { error?: string; project?: Project };
+    const result = await response.json() as { error?: string; project?: Project; task?: AssignedTask };
     if (!response.ok) throw new Error(result.error ?? "Could not save the project.");
     return result;
   }
@@ -46,7 +47,7 @@ export function WorkManager({ initialProjects, tasks, onTaskProjectChange }: { i
 
   async function assign(taskId: string, projectId: string) {
     setBusy(true); setNotice("");
-    try { const nextProjectId = projectId || null; await request("PATCH", { taskId, projectId: nextProjectId }); onTaskProjectChange?.(taskId, nextProjectId); setNotice("Task project updated."); router.refresh(); }
+    try { const nextProjectId = projectId || null; const result = await request("PATCH", { taskId, projectId: nextProjectId }); if (result.task) onTaskProjectChange?.(result.task); setNotice("Task project updated."); router.refresh(); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Could not update the task."); }
     setBusy(false);
   }

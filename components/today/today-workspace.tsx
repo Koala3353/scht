@@ -531,7 +531,7 @@ export function TodayWorkspace({
             Keep the small things visible.
           </h2>
           <div className="mt-5">
-            <TaskEditor currentTermId={selectedTermId} defaultToCurrentTerm onSave={saveTask} projects={projects} subjects={subjects} task={newManualTask()} terms={terms} />
+            <TaskEditor baseUpdatedAt={null} currentTermId={selectedTermId} defaultToCurrentTerm onSave={saveTask} projects={projects} subjects={subjects} task={newManualTask()} terms={terms} />
           </div>
           <div className="mt-6 border-t border-slate-100 pt-5">
             <p className="flex items-center gap-2 text-sm font-bold text-ink">

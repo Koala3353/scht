@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../components/work/work-manager", () => ({
-  WorkManager: ({ tasks, onTaskProjectChange }: { tasks: Array<{ id: string }>; onTaskProjectChange?: (taskId: string, projectId: string | null) => void }) => <button onClick={() => onTaskProjectChange?.(tasks[0]?.id ?? "", projectId)} type="button">Assign task to Capstone</button>,
+  WorkManager: ({ tasks, onTaskProjectChange }: { tasks: Array<{ id: string }>; onTaskProjectChange?: (task: { id: string; projectId: string | null; updatedAt: string }) => void }) => <button onClick={() => onTaskProjectChange?.({ id: tasks[0]?.id ?? "", projectId, updatedAt: "2026-07-19T11:00:00.000Z" })} type="button">Assign task to Capstone</button>,
 }));
 
 import { PlannerWorkspace } from "../../components/planner/planner-workspace";
@@ -61,7 +61,9 @@ describe("PlannerWorkspace saves", () => {
     expect(screen.getByRole("button", { name: "Retry saved change" })).not.toBeNull();
   });
 
-  it("updates task rows and project filters immediately after direct project assignment", async () => {
+  it("applies a direct assignment revision before the next task edit", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [] }) }));
+    vi.stubGlobal("fetch", fetchMock);
     render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
     const user = userEvent.setup();
 
@@ -71,5 +73,11 @@ describe("PlannerWorkspace saves", () => {
 
     expect(screen.getByText("Save failure task")).not.toBeNull();
     expect(screen.getAllByText("Capstone").length).toBeGreaterThan(1);
+    await user.click(screen.getByRole("button", { name: "Edit Save failure task" }));
+    await user.click(screen.getByRole("button", { name: "Save task" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as { mutations: Array<{ baseUpdatedAt: string | null }> };
+    expect(request.mutations[0]?.baseUpdatedAt).toBe("2026-07-19T11:00:00.000Z");
   });
 });
