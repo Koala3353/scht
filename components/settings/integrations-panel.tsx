@@ -79,7 +79,7 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
       const response = await fetch("/api/integrations/canvas", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action, baseUrl: canvasUrl, token: canvasToken }),
+        body: JSON.stringify(action === "connect" ? { action, baseUrl: canvasUrl, token: canvasToken } : { action }),
       });
       const body = await responseBody(response);
       const nextNotice = response.ok

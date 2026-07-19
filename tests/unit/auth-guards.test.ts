@@ -71,4 +71,20 @@ describe('requireOwnerAdmin', () => {
     });
     expect(mocks.forbidden).not.toHaveBeenCalled();
   });
+
+  it('seeds only the development demo account as an owner admin', () => {
+    const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+    const demoRoute = readFileSync(
+      path.resolve(testDirectory, '../../app/api/dev/demo-login/route.ts'),
+      'utf8',
+    );
+    const adminPage = readFileSync(
+      path.resolve(testDirectory, '../../app/(admin)/admin/page.tsx'),
+      'utf8',
+    );
+
+    expect(demoRoute).toContain("role: 'owner_admin'");
+    expect(demoRoute).toContain("process.env.NODE_ENV === 'development'");
+    expect(adminPage).toContain('await requireOwnerAdmin()');
+  });
 });

@@ -8,6 +8,8 @@ import {
   Bot,
   CalendarDays,
   ClipboardList,
+  CircleHelp,
+  Ellipsis,
   GraduationCap,
   LayoutDashboard,
   Settings,
@@ -29,7 +31,7 @@ const mobileLinks = [
   { href: "/subjects", label: "Subjects", icon: BookOpen },
   { href: "/grades", label: "Grades", icon: GraduationCap },
   { href: "/ai", label: "AI", icon: Bot },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/settings", label: "More", icon: Ellipsis },
 ];
 
 function isCurrent(pathname: string, href: string) {
@@ -104,6 +106,18 @@ export function AppShell({
               <span className="relative grid place-items-center"><Settings aria-hidden="true" size={19} strokeWidth={2.25} />{hasIntegrationAttention ? <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 size-2.5 rounded-full bg-red-500 ring-2 ring-[#073f42]" /> : null}</span>
               Settings
               {hasIntegrationAttention ? <span className="sr-only">A connection needs attention</span> : null}
+            </a>
+            <a
+              aria-current={isCurrent(pathname, "/help") ? "page" : undefined}
+              className={`mt-1 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-bold transition focus-visible:outline-white ${
+                isCurrent(pathname, "/help")
+                  ? "bg-white text-[#073f42] shadow-sm"
+                  : "text-[#e5f2ef] hover:bg-white/10 hover:text-white"
+              }`}
+              href="/help"
+            >
+              <CircleHelp aria-hidden="true" size={19} strokeWidth={2.25} />
+              Help
             </a>
             <p className="px-3 pt-4 text-xs leading-5 text-[#b8d8d1]">
               Your data stays in your workspace. Connections are always

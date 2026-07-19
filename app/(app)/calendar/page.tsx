@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/workspace/page-header";
+import { ProviderResync, type Provider } from "@/components/integrations/provider-resync";
 import { calendarEntries, type CalendarEntry } from "@/lib/calendar/entries";
 import { calendarTimeZone, localDayLabel, resolveCalendarRange } from "@/lib/calendar/range";
 import { requireUser } from "@/lib/auth/guards";
@@ -18,7 +19,7 @@ export default async function CalendarPage({
 }) {
   const user = await requireUser();
   const supabase = await createClient();
-  const [profileResult, preferencesResult] = await Promise.all([
+  const [profileResult, preferencesResult, connectionsResult] = await Promise.all([
     supabase
       .from("profiles")
       .select("current_term_id")
@@ -29,9 +30,17 @@ export default async function CalendarPage({
       .select("timezone")
       .eq("user_id", user.id)
       .maybeSingle(),
+    supabase
+      .from("integration_connections")
+      .select("provider")
+      .eq("user_id", user.id)
+      .eq("provider", "google"),
   ]);
   const profile = requireQuery(profileResult, "calendar profile");
   const preferences = requireQuery(preferencesResult, "calendar timezone preference");
+  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+    (connection) => connection.provider === "google" ? ["google" as const] : [],
+  );
   const timezone = calendarTimeZone(preferences?.timezone);
   const range = resolveCalendarRange(await searchParams, new Date(), timezone);
   const [tasksResult, eventsResult] = await Promise.all([
@@ -78,9 +87,12 @@ export default async function CalendarPage({
 
   return (
     <main>
-      <PageHeader eyebrow="CALENDAR" title="Scheduled work">
-        Task deadlines and imported Google Calendar events share one time-ordered view.
-      </PageHeader>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <PageHeader eyebrow="CALENDAR" title="Scheduled work">
+          Task deadlines and imported Google Calendar events share one time-ordered view.
+        </PageHeader>
+        <ProviderResync providers={savedProviders} />
+      </div>
       <p className="mx-auto mt-4 max-w-5xl px-4 text-sm text-slate-600 sm:px-0">
         {new Intl.DateTimeFormat(undefined, { timeZone: timezone }).format(range.from)} – {new Intl.DateTimeFormat(undefined, { timeZone: timezone }).format(new Date(range.to.getTime() - 1))}
       </p>

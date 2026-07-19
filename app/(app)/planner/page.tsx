@@ -1,5 +1,6 @@
 import { PlannerWorkspace } from "@/components/planner/planner-workspace";
 import { PageHeader } from "@/components/workspace/page-header";
+import { ProviderResync, type Provider } from "@/components/integrations/provider-resync";
 import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
 import { focusedTaskId, mergeFocusedTask } from "@/lib/tasks/focused-task";
@@ -13,7 +14,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
   const supabase = await createClient();
   const rawTaskId = (await searchParams).task;
   const selectedTaskId = focusedTaskId(rawTaskId);
-  const [profileResult, tasksResult, subjectsResult, termsResult, projectsResult, categoriesResult, focusedTaskResult] = await Promise.all([
+  const [profileResult, tasksResult, subjectsResult, termsResult, projectsResult, categoriesResult, focusedTaskResult, connectionsResult] = await Promise.all([
     supabase.from("profiles").select("current_term_id").eq("id", user.id).maybeSingle(),
     supabase
       .from("tasks")
@@ -44,6 +45,11 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
           .eq("user_id", user.id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from("integration_connections")
+      .select("provider")
+      .eq("user_id", user.id)
+      .in("provider", ["google", "canvas"]),
   ]);
   const profile = requireQuery(profileResult, "tasks profile");
   const tasks = requireQuery(tasksResult, "tasks") ?? [];
@@ -52,13 +58,21 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
   const projects = requireQuery(projectsResult, "task projects") ?? [];
   const categories = requireQuery(categoriesResult, "task grade categories") ?? [];
   const focusedTask = requireQuery(focusedTaskResult, "focused task");
+  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+    (connection) => connection.provider === "google" || connection.provider === "canvas"
+      ? [connection.provider]
+      : [],
+  );
   const plannerTasks = mergeFocusedTask(tasks as TaskRow[], focusedTask as TaskRow | null);
 
   return (
     <main>
-      <PageHeader eyebrow="TASKS" title="Your shared task workspace">
-        Capture, organize, and execute each task with its full context.
-      </PageHeader>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <PageHeader eyebrow="TASKS" title="Your shared task workspace">
+          Capture, organize, and execute each task with its full context.
+        </PageHeader>
+        <ProviderResync providers={savedProviders} />
+      </div>
       <PlannerWorkspace
         currentTermId={profile?.current_term_id ?? null}
         focusedTaskId={selectedTaskId}

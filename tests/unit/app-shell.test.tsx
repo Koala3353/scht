@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import manifest from '../../app/manifest';
 import { AppShell } from '../../components/layout/app-shell';
@@ -23,6 +23,11 @@ describe('PWA manifest', () => {
     expect(screen.getAllByRole('link', { name: 'Subjects' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Grades' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'AI' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('link', { name: 'Settings' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Help' }).length).toBeGreaterThan(0);
+    expect(
+      within(screen.getByRole('navigation', { name: 'Mobile navigation' }))
+        .getByRole('link', { name: 'More' })
+        .getAttribute('href'),
+    ).toBe('/settings');
   });
 });

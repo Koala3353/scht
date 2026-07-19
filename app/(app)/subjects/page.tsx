@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/workspace/page-header";
+import { ProviderResync, type Provider } from "@/components/integrations/provider-resync";
 import { SyllabusManager } from "@/components/subjects/syllabus-manager";
 import { SubjectTaskQueue } from "@/components/subjects/subject-task-queue";
 import { SubjectUnitsEditor } from "@/components/subjects/subject-units-editor";
@@ -61,16 +62,24 @@ export default async function SubjectsPage() {
         "subject tasks",
       )
     : []) ?? [];
-  const [categoriesResult, resultsResult, termsResult, projectsResult] = await Promise.all([
+  const [categoriesResult, resultsResult, termsResult, projectsResult, connectionsResult] = await Promise.all([
     subjects.length ? supabase.from("grade_categories").select("id, subject_id, name, weight_percent").eq("user_id", user.id).in("subject_id", subjects.map((subject) => subject.id)) : Promise.resolve({ data: [], error: null }),
     supabase.from("assessment_results").select("category_id, score, possible_score").eq("user_id", user.id),
     supabase.from("academic_terms").select("id, name, academic_year").eq("user_id", user.id).order("starts_on"),
     supabase.from("projects").select("id, name, status").eq("user_id", user.id).order("created_at"),
+    supabase
+      .from("integration_connections")
+      .select("provider")
+      .eq("user_id", user.id)
+      .eq("provider", "canvas"),
   ]);
   const categories = requireQuery(categoriesResult, "subject grade categories") ?? [];
   const results = requireQuery(resultsResult, "subject assessment results") ?? [];
   const terms = requireQuery(termsResult, "subject task terms") ?? [];
   const projects = requireQuery(projectsResult, "subject task projects") ?? [];
+  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+    (connection) => connection.provider === "canvas" ? ["canvas" as const] : [],
+  );
   const openTasksBySubject = new Map<string, ReturnType<typeof toCachedTask>[]>();
   for (const row of taskRows as TaskRow[]) {
     const task = toCachedTask(row);
@@ -101,10 +110,13 @@ export default async function SubjectsPage() {
       });
   return (
     <main>
-      <PageHeader eyebrow="CURRENT TERM" title="Subjects">
-        Course notes, syllabus review, Canvas state, and grade progress stay
-        grouped by class.
-      </PageHeader>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <PageHeader eyebrow="CURRENT TERM" title="Subjects">
+          Course notes, syllabus review, Canvas state, and grade progress stay
+          grouped by class.
+        </PageHeader>
+        <ProviderResync providers={savedProviders} />
+      </div>
       <section className="mx-auto mt-6 grid max-w-5xl gap-4 px-4 sm:grid-cols-2 sm:px-0">
         {(subjects ?? []).map((subject) => (
           <article

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowRight, CheckCircle2, Cloud } from "lucide-react";
 
 import { selectAgendaTasks } from "./agenda";
@@ -26,6 +26,7 @@ interface TodayWorkspaceProps {
   terms?: TaskTerm[];
   subjects?: TaskSubject[];
   projects?: TaskProject[];
+  headerAction?: ReactNode;
 }
 
 async function postTaskMutations(
@@ -61,6 +62,7 @@ export function TodayWorkspace({
   terms = [],
   subjects = [],
   projects = [],
+  headerAction,
 }: TodayWorkspaceProps) {
   function newManualTask(): CachedTask {
     const now = new Date().toISOString();
@@ -398,6 +400,7 @@ export function TodayWorkspace({
             attention now.
           </p>
         </div>
+        {headerAction}
         <p
           aria-live="polite"
           className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm font-bold ${syncTone(syncState)}`}

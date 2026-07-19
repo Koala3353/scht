@@ -11,7 +11,7 @@ async function seedDemoWorkspace(userId: string) {
   const { data: existingTerm } = await supabase.from('academic_terms').select('id').eq('user_id', userId).order('starts_on').limit(1).maybeSingle();
   const term = existingTerm ?? (await supabase.from('academic_terms').insert({ user_id: userId, academic_year: year, name: 'First Semester', starts_on: `${year}-08-01`, ends_on: `${year}-12-20` }).select('id').single()).data;
   if (!term) throw new Error('Could not create the demo academic term.');
-  await supabase.from('profiles').upsert({ id: userId, display_name: 'Scht demo user', current_term_id: term.id, onboarding_completed_at: new Date().toISOString() });
+  await supabase.from('profiles').upsert({ id: userId, display_name: 'Scht demo user', role: 'owner_admin', current_term_id: term.id, onboarding_completed_at: new Date().toISOString() });
   const { data: currentSubjects } = await supabase.from('subjects').select('id, code').eq('user_id', userId).eq('term_id', term.id);
   if ((currentSubjects ?? []).length > 0) return;
   const { data: subjects, error: subjectError } = await supabase.from('subjects').insert([{ user_id: userId, term_id: term.id, code: 'MATH 101', name: 'Applied Mathematics', syllabus_status: 'missing' }, { user_id: userId, term_id: term.id, code: 'ENG 110', name: 'Academic Writing', syllabus_status: 'missing' }]).select('id, code');

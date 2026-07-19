@@ -1,4 +1,5 @@
 import { TodayWorkspace } from "@/components/today/today-workspace";
+import { ProviderResync, type Provider } from "@/components/integrations/provider-resync";
 import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
 import { taskColumns, toCachedTask, type TaskRow } from "@/lib/tasks/task-view";
@@ -16,7 +17,7 @@ export default async function TodayPage() {
     "today profile",
   );
   const selectedTermId = profile?.current_term_id ?? null;
-  const [tasksResult, termsResult, subjectsResult, projectsResult] = await Promise.all([
+  const [tasksResult, termsResult, subjectsResult, projectsResult, connectionsResult] = await Promise.all([
     selectedTermId
       ? supabase
           .from("tasks")
@@ -36,15 +37,26 @@ export default async function TodayPage() {
       .select("id, name, status")
       .eq("user_id", user.id)
       .order("created_at"),
+    supabase
+      .from("integration_connections")
+      .select("provider")
+      .eq("user_id", user.id)
+      .in("provider", ["google", "canvas"]),
   ]);
   const tasks = requireQuery(tasksResult, "today tasks") ?? [];
   const terms = requireQuery(termsResult, "today terms") ?? [];
   const subjects = requireQuery(subjectsResult, "today subjects") ?? [];
   const projects = requireQuery(projectsResult, "today projects") ?? [];
+  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+    (connection) => connection.provider === "google" || connection.provider === "canvas"
+      ? [connection.provider]
+      : [],
+  );
 
   return (
     <TodayWorkspace
       initialTasks={(tasks as TaskRow[]).map(toCachedTask)}
+      headerAction={<ProviderResync providers={savedProviders} />}
       projects={projects.map((project) => ({
         id: project.id,
         label: project.name,
