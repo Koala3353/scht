@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TaskMutation, TaskSyncResponse } from '../../lib/sync/types';
 
 const outbox = new Map<string, Record<string, unknown>>();
+let transactionQueue = Promise.resolve();
 
 vi.mock('../../lib/sync/db', () => ({
   taskDb: {
@@ -22,7 +24,19 @@ vi.mock('../../lib/sync/db', () => ({
       get: vi.fn(async (id: string) => outbox.get(id)),
       count: vi.fn(async () => outbox.size),
     },
-    transaction: vi.fn(async (_mode: string, _table: unknown, callback: () => Promise<void>) => callback()),
+    transaction: vi.fn(async (_mode: string, _table: unknown, callback: () => Promise<unknown>) => {
+      const previousTransaction = transactionQueue;
+      let releaseTransaction: () => void = () => undefined;
+      transactionQueue = new Promise<void>((resolve) => {
+        releaseTransaction = resolve;
+      });
+      await previousTransaction;
+      try {
+        return await callback();
+      } finally {
+        releaseTransaction();
+      }
+    }),
   },
 }));
 
@@ -41,6 +55,7 @@ const taskId = 'f8e5cb4d-2dd4-4d63-a9d1-5af4c3b1d7f0';
 describe('task mutation outbox', () => {
   beforeEach(() => {
     outbox.clear();
+    transactionQueue = Promise.resolve();
     vi.clearAllMocks();
   });
 
@@ -52,6 +67,37 @@ describe('task mutation outbox', () => {
 
     await flushTaskOutbox(userId, async () => ({ accepted: [{ id: 'm1', task: { id: taskId, title: 'Write reflection', kind: 'school', priority: 'normal', description: '', links: [], updatedAt: '2026-07-19T10:00:00.000Z', source: 'manual', sourceId: null } }], rejected: [] }));
     expect(outbox.size).toBe(0);
+  });
+
+  it('atomically claims a due mutation when two flushes start together', async () => {
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: validTask, baseUpdatedAt: null });
+
+    let completeFirstRequest: (response: TaskSyncResponse) => void = () => undefined;
+    const firstFetcher = vi.fn(async (mutations: TaskMutation[]): Promise<TaskSyncResponse> => {
+      expect(mutations.map((mutation) => mutation.id)).toEqual(['m1']);
+      return new Promise<TaskSyncResponse>((resolve) => {
+        completeFirstRequest = resolve;
+      });
+    });
+    const secondFetcher = vi.fn(async () => ({ accepted: [], rejected: [] }));
+
+    // Start both flushes before either transport callback is allowed to finish.
+    const firstFlush = flushTaskOutbox(userId, firstFetcher);
+    const secondFlush = flushTaskOutbox(userId, secondFetcher);
+
+    await vi.waitFor(() => expect(firstFetcher).toHaveBeenCalledTimes(1));
+    expect(secondFetcher).not.toHaveBeenCalled();
+
+    completeFirstRequest({
+      accepted: [{ id: 'm1', task: { id: taskId, title: 'Write reflection', kind: 'school', priority: 'normal', description: '', links: [], updatedAt: '2026-07-19T10:00:00.000Z', source: 'manual', sourceId: null } }],
+      rejected: [],
+    });
+    const [firstResponse, secondResponse] = await Promise.all([firstFlush, secondFlush]);
+
+    expect(firstResponse.rejected).toEqual([]);
+    expect(secondResponse.rejected).toEqual([]);
+    expect(secondFetcher).not.toHaveBeenCalled();
+    expect(outbox.has('m1')).toBe(false);
   });
 
   it('defers a network failure with exponential backoff', async () => {

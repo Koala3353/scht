@@ -181,20 +181,41 @@ function nextActionableMutationByTask(mutations: TaskMutation[]): Map<string, Ta
 
 async function selectDueMutations(userId: string): Promise<TaskMutation[]> {
   const now = Date.now();
-  const mutations = await taskDb.outbox.where('userId').equals(userId).toArray();
-  const earliestByTask = nextActionableMutationByTask(mutations);
+  return taskDb.transaction('rw', taskDb.outbox, async () => {
+    // Selection and claiming have to share one write transaction. Otherwise
+    // two flushes can each select the same due row before either marks it as
+    // in flight, then send the same mutation twice.
+    const mutations = await taskDb.outbox.where('userId').equals(userId).toArray();
+    const earliestByTask = nextActionableMutationByTask(mutations);
+    const mutationsToFlush: TaskMutation[] = [];
 
-  const mutationsToFlush: TaskMutation[] = [];
-  await taskDb.transaction('rw', taskDb.outbox, async () => {
-    await Promise.all([...earliestByTask.values()].map(async (mutation) => {
-      // A task is a FIFO mutation chain. A later edit cannot leave until every
-      // older edit has been acknowledged, including after a failed request.
-      if (mutation.syncState !== 'pending' || mutation.inFlight || mutation.nextAttemptAt > now) return;
+    for (const candidate of earliestByTask.values()) {
+      // Re-read the row instead of trusting the selection snapshot. This also
+      // makes the returned list contain only records this caller claimed.
+      const mutation = await taskDb.outbox.get(candidate.id);
+      if (
+        !mutation ||
+        mutation.userId !== userId ||
+        mutation.syncState !== 'pending' ||
+        mutation.inFlight ||
+        mutation.nextAttemptAt > now
+      ) {
+        continue;
+      }
+
+      // Revalidate that this is still the FIFO head for its task. A conflict
+      // remains a blocking head, while terminal recovery history does not.
+      const currentMutations = await taskDb.outbox.where('userId').equals(userId).toArray();
+      const taskKey = mutation.payload.id ?? mutation.id;
+      if (nextActionableMutationByTask(currentMutations).get(taskKey)?.id !== mutation.id) continue;
+
       await taskDb.outbox.update(mutation.id, { inFlight: true });
-      mutationsToFlush.push({ ...mutation, inFlight: true });
-    }));
+      const claimedMutation = await taskDb.outbox.get(mutation.id);
+      if (claimedMutation?.inFlight) mutationsToFlush.push(claimedMutation);
+    }
+
+    return mutationsToFlush.sort((first, second) => first.createdAt - second.createdAt);
   });
-  return mutationsToFlush.sort((first, second) => first.createdAt - second.createdAt);
 }
 
 export async function flushTaskOutbox(
