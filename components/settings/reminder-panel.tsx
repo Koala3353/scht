@@ -12,6 +12,8 @@ type Preference = {
   digest_window_days: number | null;
   digest_enabled: boolean | null;
   digest_time: string | null;
+  digest_frequency: "daily" | "weekly" | null;
+  digest_weekday: number | null;
 } | null;
 
 export function ReminderPanel({
@@ -23,6 +25,8 @@ export function ReminderPanel({
 }) {
   const [enabled, setEnabled] = useState(preference?.enabled ?? true);
   const [digestEnabled, setDigestEnabled] = useState(preference?.digest_enabled ?? false);
+  const [digestFrequency, setDigestFrequency] = useState<"daily" | "weekly">(preference?.digest_frequency === "weekly" ? "weekly" : "daily");
+  const [digestWindowDays, setDigestWindowDays] = useState(preference?.digest_window_days ?? 3);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -38,9 +42,11 @@ export function ReminderPanel({
         timezone: form.get("timezone"),
         quietStart: form.get("quietStart") || null,
         quietEnd: form.get("quietEnd") || null,
-        digestWindowDays: Number(form.get("digestWindowDays")),
+        digestWindowDays,
         digestEnabled,
         digestTime: form.get("digestTime"),
+        digestFrequency,
+        digestWeekday: Number(form.get("digestWeekday") ?? preference?.digest_weekday ?? 1),
       }),
     });
     const body = (await response.json()) as { error?: string };
@@ -80,7 +86,7 @@ export function ReminderPanel({
             Let the right prompt arrive.
           </h2>
           <p className="mt-3 max-w-md leading-7 text-slate-700">
-            Schedule task reminders when you need them, or opt into one calm daily timeline. Each email draws only from Calendar, Gmail, Canvas, and tasks already imported into Scht.
+            Schedule task reminders when you need them, or opt into a calm daily or weekly update. Each email draws only from Calendar, Gmail, Canvas, and tasks already imported into Scht.
           </p>
           <div className="mt-5 flex items-start gap-3 rounded-xl bg-[#f7faf9] p-4 text-sm leading-6 text-slate-700">
             <Sparkles className="mt-0.5 size-4 shrink-0 text-teal" aria-hidden="true" />
@@ -103,21 +109,38 @@ export function ReminderPanel({
           </label>
           <label className="text-sm font-bold text-ink sm:col-span-2">
             Email timeline
-            <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" defaultValue={String(preference?.digest_window_days ?? 3)} name="digestWindowDays">
+            <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" name="digestWindowDays" onChange={(event) => setDigestWindowDays(Number(event.target.value))} value={String(digestWindowDays)}>
               <option value="1">Next day</option>
               <option value="3">Next 3 days</option>
               <option value="7">Next 7 days</option>
               <option value="14">Next 14 days</option>
             </select>
-            <span className="mt-1.5 block text-xs font-normal leading-5 text-slate-600">Used in scheduled reminders and the optional daily email. It combines imported Google Calendar events, Canvas deadlines, unread Gmail follow-ups, and your own due-dated tasks.</span>
+            <span className="mt-1.5 block text-xs font-normal leading-5 text-slate-600">Used in scheduled reminders and your optional update. Choose how far ahead it looks; the email combines imported Calendar events, Canvas deadlines, Gmail follow-ups, and your own due-dated tasks.</span>
           </label>
           <div className="rounded-xl bg-[#f7faf9] p-3 sm:col-span-2">
             <label className="flex min-h-11 items-center gap-3 text-sm font-bold text-ink">
               <input checked={digestEnabled} className="size-4 accent-[#075e60]" onChange={(event) => setDigestEnabled(event.target.checked)} type="checkbox" />
-              Send one daily timeline email
+              Send a scheduled email update
             </label>
-            <label className="mt-3 block text-sm font-bold text-ink">Daily delivery time<input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" defaultValue={preference?.digest_time?.slice(0, 5) ?? "07:00"} disabled={!digestEnabled} name="digestTime" type="time" /></label>
-            <p className="mt-2 text-xs font-normal leading-5 text-slate-600">The Apps Script trigger checks this time in your selected time zone and sends at most one daily digest.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm font-bold text-ink">Cadence
+                <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" disabled={!digestEnabled} name="digestFrequency" onChange={(event) => { const next = event.target.value === "weekly" ? "weekly" : "daily"; setDigestFrequency(next); if (next === "weekly" && digestWindowDays < 7) setDigestWindowDays(7); }} value={digestFrequency}>
+                  <option value="daily">Daily update</option>
+                  <option value="weekly">Weekly update</option>
+                </select>
+              </label>
+              <label className="block text-sm font-bold text-ink">Delivery time
+                <input className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" defaultValue={preference?.digest_time?.slice(0, 5) ?? "07:00"} disabled={!digestEnabled} name="digestTime" type="time" />
+              </label>
+            </div>
+            {digestFrequency === "weekly" && (
+              <label className="mt-3 block text-sm font-bold text-ink">Weekly delivery day
+                <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink disabled:opacity-60" defaultValue={String(preference?.digest_weekday ?? 1)} disabled={!digestEnabled} name="digestWeekday">
+                  <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option>
+                </select>
+              </label>
+            )}
+            <p className="mt-2 text-xs font-normal leading-5 text-slate-600">Daily sends one concise outlook each day. Weekly sends one seven- or fourteen-day update on the day you choose, always in your selected time zone.</p>
           </div>
           <label className="flex min-h-11 items-center gap-3 rounded-xl bg-[#f7faf9] px-3 text-sm font-bold text-ink sm:col-span-2">
             <input checked={enabled} className="size-4 accent-[#075e60]" onChange={(event) => setEnabled(event.target.checked)} type="checkbox" />

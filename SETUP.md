@@ -77,6 +77,7 @@ supabase/migrations/0006_provider_sync_and_syllabus_storage.sql
 supabase/migrations/0007_academic_scale_and_subject_units.sql
 supabase/migrations/0008_reminder_email_digest.sql
 supabase/migrations/0009_projects_and_daily_digests.sql
+supabase/migrations/0010_digest_cadence.sql
 ```
 
 They create the invite-only workspace, row-level security policies, subjects and QPI/GPA records, task sync, encrypted integration storage, syllabi, reminders, and audit log. Apply migrations before deploying; the app will not work correctly with only a subset.
@@ -161,7 +162,7 @@ For a syllabus, upload it from the subject card. Text files receive candidate gr
 
 ## 10. Deploy Apps Script reminders
 
-Scht’s reminder worker is [apps-script/reminders.gs](apps-script/reminders.gs). It calls the protected Vercel route, sends a responsive HTML email from the script owner’s Google account, and acknowledges each job. Scheduled task reminders and the optional daily timeline email both use the student’s chosen 1, 3, 7, or 14-day window. That timeline combines only data already imported into Scht: Google Calendar events, Canvas deadlines, Gmail follow-ups, and due-dated Scht tasks.
+Scht’s reminder worker is [apps-script/reminders.gs](apps-script/reminders.gs). It calls the protected Vercel route, sends a responsive HTML email from the script owner’s Google account, and acknowledges each job. Scheduled task reminders and optional email updates use the student’s chosen 1, 3, 7, or 14-day outlook. Students can choose a concise daily update or a genuine once-weekly update on a selected weekday; the timeline combines only data already imported into Scht: Google Calendar events, Canvas deadlines, Gmail follow-ups, and due-dated Scht tasks.
 
 1. Create a Google Apps Script project at [script.google.com](https://script.google.com).
 2. Replace `Code.gs` with the contents of `apps-script/reminders.gs`.
@@ -176,7 +177,7 @@ Scht’s reminder worker is [apps-script/reminders.gs](apps-script/reminders.gs)
 
 4. Create a time-driven trigger for `dispatchSchtReminders` every 15 minutes. Select the account and timezone intentionally: `MailApp` sends from that account, and its quota applies to that account.
 5. Run `dispatchSchtReminders` once manually and approve the `UrlFetchApp` and `MailApp` permissions.
-6. In Scht **Settings → Reminders**, choose the timeline window, optionally turn on the daily email and pick its delivery time, then save. Connect/sync Google or Canvas first if you want those items in the email.
+6. In Scht **Settings → Reminders**, choose the outlook window, turn on the scheduled email update if wanted, then choose **Daily** or **Weekly**, a delivery time, and (for weekly) its weekday. Connect/sync Google or Canvas first if you want those items in the email. The email includes a quick count of tasks and events, ordered upcoming dates, Gmail follow-ups, and a link back to Scht.
 7. Create a due-dated task, schedule a reminder, and verify the HTML email has the reminder, timeline, and Gmail review list (when unread Gmail items were imported).
 
 The Apps Script project never receives Google OAuth, Canvas, or Supabase credentials; it only needs the protected endpoint and `REMINDER_DISPATCH_TOKEN`. The dispatch route needs both `SUPABASE_SERVICE_ROLE_KEY` and `REMINDER_DISPATCH_TOKEN`; the latter is checked on every request. Do not expose either token in client-side code or a public Apps Script URL.

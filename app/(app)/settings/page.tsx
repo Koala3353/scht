@@ -19,7 +19,7 @@ export default async function SettingsPage({
     await Promise.all([
       supabase
         .from("reminder_preferences")
-        .select("timezone, quiet_start, quiet_end, enabled, digest_window_days, digest_enabled, digest_time")
+        .select("timezone, quiet_start, quiet_end, enabled, digest_window_days, digest_enabled, digest_time, digest_frequency, digest_weekday")
         .eq("user_id", user.id)
         .maybeSingle(),
       supabase

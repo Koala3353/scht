@@ -9,7 +9,7 @@ Scht is an invite-only academic workspace for Ateneo students: one calm place fo
 - Builds a current-term task view with offline task capture and sync.
 - Imports an IPS curriculum, tracks subjects, and calculates Ateneo QPI or a 4.0 GPA.
 - Syncs Google Calendar events, unread Gmail follow-ups, and Canvas assignments when a student explicitly connects them.
-- Sends optional Apps Script reminder emails with a configurable upcoming timeline.
+- Sends accessible, mobile-friendly Apps Script task reminders plus configurable daily or weekly outlook emails.
 - Lets students bring their own OpenAI or Hack Club AI key; AI can only propose tasks until the student reviews and applies them.
 - Gives owner admins invitations, Google OAuth test-user links, operational metrics, audit history, and data export.
 
@@ -40,7 +40,7 @@ At minimum, set these values in `.env.local` and in Vercel Production:
 
 Google sync also needs `INTEGRATION_ENCRYPTION_KEY`, `GOOGLE_OAUTH_CLIENT_ID`, and `GOOGLE_OAUTH_CLIENT_SECRET`. Apps Script reminders also need `REMINDER_DISPATCH_TOKEN`. Never commit `.env.local` or expose server-only values with a `NEXT_PUBLIC_` prefix.
 
-Apply every SQL migration in `supabase/migrations`—including `0008_reminder_email_digest.sql` and `0009_projects_and_daily_digests.sql`—before inviting users. Full, copyable deployment instructions are in [SETUP.md](SETUP.md).
+Apply every SQL migration in `supabase/migrations`—including `0008_reminder_email_digest.sql`, `0009_projects_and_daily_digests.sql`, and `0010_digest_cadence.sql`—before inviting users. Full, copyable deployment instructions are in [SETUP.md](SETUP.md).
 
 ## Production checklist
 
