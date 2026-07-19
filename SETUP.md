@@ -208,15 +208,7 @@ Copy `.env.example` to `.env.local`, then configure every entry as follows. Keep
 | `GOOGLE_OAUTH_CLIENT_SECRET` | The matching Web OAuth client secret from Google Cloud. | Refreshing Google Calendar/Gmail connections. |
 | `REMINDER_DISPATCH_TOKEN` | A long random shared secret, for example `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Configure the same value as Apps Script’s `SCHT_REMINDER_TOKEN`. | Protected Apps Script reminder delivery. |
 | `HACK_CLUB_AI_BASE_URL` | Leave as `https://ai.hackclub.com/v1` unless Hack Club provides a replacement endpoint. | Hack Club AI provider. |
-| `DEMO_AUTH_ENABLED` | Set to `true` only in local `.env.local` when you want the demo sign-in. Leave `false` in Vercel and every shared environment. | Local demo account only. |
 
 ### Local demo sign-in
 
-For a real, locally authenticated preview, set these values in `.env.local` and restart `npm run dev -- --port 3001`:
-
-```env
-SUPABASE_SERVICE_ROLE_KEY=<your Supabase service_role key>
-DEMO_AUTH_ENABLED=true
-```
-
-On the first screen, type exactly `adminadminadmin` in the email field and submit. Scht creates or reuses `adminadminadmin@demo.scht.local` as a standard member, seeds a small term with two subjects and two tasks if needed, and follows Supabase’s one-time login flow. The endpoint runs only when `NODE_ENV=development` and the explicit flag above is `true`; it returns 404 in production builds even if the flag is accidentally set. Owner-admin privileges remain restricted to your normal invite-based account.
+On the first screen, type exactly `adminadminadmin` in the email field and submit. In local development, Scht opens an interactive preview workspace immediately—no credentials required. If `SUPABASE_SERVICE_ROLE_KEY` is present, it instead creates or reuses `adminadminadmin@demo.scht.local`, seeds a small member workspace, and follows Supabase’s normal one-time login flow. The demo endpoint and preview page return 404 in production builds.

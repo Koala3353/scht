@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 
 const demoEmail = 'adminadminadmin@demo.scht.local';
 
-function enabled() { return process.env.NODE_ENV === 'development' && process.env.DEMO_AUTH_ENABLED === 'true'; }
+function enabled() { return process.env.NODE_ENV === 'development'; }
 
 async function seedDemoWorkspace(userId: string) {
   const supabase = createAdminClient();
@@ -22,6 +22,7 @@ async function seedDemoWorkspace(userId: string) {
 
 export async function GET(request: NextRequest) {
   if (!enabled()) return new NextResponse('Not found.', { status: 404 });
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return NextResponse.redirect(new URL('/demo', request.url));
   try {
     const supabase = createAdminClient();
     const { error: createError } = await supabase.auth.admin.createUser({ email: demoEmail, email_confirm: true, user_metadata: { name: 'Scht demo admin' } });
