@@ -12,6 +12,7 @@ export async function enqueueTaskMutation(mutation: TaskMutationInput) {
     attempts: mutation.attempts ?? 0,
     nextAttemptAt: mutation.nextAttemptAt ?? now,
     syncState: mutation.syncState ?? 'pending',
+    inFlight: false,
     ...(mutation.syncError ? { syncError: mutation.syncError } : {}),
   };
 
@@ -29,7 +30,13 @@ export async function enqueueTaskMutation(mutation: TaskMutationInput) {
   const baseUpdatedAt = pendingForTask[0]?.baseUpdatedAt ?? queuedMutation.baseUpdatedAt;
 
   await taskDb.transaction('rw', taskDb.outbox, async () => {
-    await Promise.all(pendingForTask.map((candidate) => taskDb.outbox.delete(candidate.id)));
+    // A request may already own one of these mutations. It must remain until
+    // that request is accepted or rejected so a transport failure can defer it.
+    await Promise.all(
+      pendingForTask
+        .filter((candidate) => !candidate.inFlight)
+        .map((candidate) => taskDb.outbox.delete(candidate.id)),
+    );
     await taskDb.outbox.put({ ...queuedMutation, baseUpdatedAt });
   });
   return queuedMutation;
@@ -50,6 +57,7 @@ async function deferMutations(mutations: TaskMutation[]) {
           attempts,
           nextAttemptAt: now + retryDelay(attempts),
           syncState: 'pending',
+          inFlight: false,
           syncError: 'Sync failed. We will retry automatically.',
         });
       }),
@@ -125,16 +133,18 @@ async function coalesceDueMutations(mutations: TaskMutation[]): Promise<TaskMuta
   const latestMutations: TaskMutation[] = [];
   await taskDb.transaction('rw', taskDb.outbox, async () => {
     await Promise.all([...grouped.values()].map(async (group) => {
-      const latest = group[group.length - 1];
-      const baseUpdatedAt = group[0].baseUpdatedAt;
-      if (group.length > 1) {
-        await Promise.all(group.slice(0, -1).map((mutation) => taskDb.outbox.delete(mutation.id)));
-        if (latest.baseUpdatedAt !== baseUpdatedAt) {
-          await taskDb.outbox.update(latest.id, { baseUpdatedAt });
-          latest.baseUpdatedAt = baseUpdatedAt;
-        }
+      const unsentPending = group.filter((mutation) => !mutation.inFlight);
+      if (unsentPending.length === 0) {
+        return;
       }
-      latestMutations.push(latest);
+
+      const latest = unsentPending[unsentPending.length - 1];
+      const baseUpdatedAt = group[0].baseUpdatedAt;
+      if (unsentPending.length > 1) {
+        await Promise.all(unsentPending.slice(0, -1).map((mutation) => taskDb.outbox.delete(mutation.id)));
+      }
+      await taskDb.outbox.update(latest.id, { baseUpdatedAt, inFlight: true });
+      latestMutations.push({ ...latest, baseUpdatedAt, inFlight: true });
     }));
   });
   return latestMutations.sort((first, second) => first.createdAt - second.createdAt);
@@ -179,6 +189,7 @@ export async function flushTaskOutbox(
             await Promise.all(
               queuedMutations
                 .filter((candidate) => candidate.id !== mutation.id && candidate.syncState === 'pending' && candidate.payload.id === accepted.task.id)
+                .filter((candidate) => !candidate.inFlight)
                 .map((candidate) => taskDb.outbox.update(candidate.id, { baseUpdatedAt: accepted.task.updatedAt })),
             );
           }
@@ -190,6 +201,7 @@ export async function flushTaskOutbox(
         if (rejection) {
           await taskDb.outbox.update(mutation.id, {
             syncState: rejection.syncState,
+            inFlight: false,
             syncError: rejection.reason,
             ...(rejection.task ? { canonicalTask: rejection.task } : {}),
           });
@@ -197,6 +209,7 @@ export async function flushTaskOutbox(
             await Promise.all(
               queuedMutations
                 .filter((candidate) => candidate.id !== mutation.id && candidate.syncState === 'pending' && candidate.payload.id === mutation.payload.id)
+                .filter((candidate) => !candidate.inFlight)
                 .map((candidate) => taskDb.outbox.update(candidate.id, {
                   syncState: 'conflict',
                   syncError: rejection.reason,
@@ -204,7 +217,13 @@ export async function flushTaskOutbox(
                 })),
             );
           }
+          return;
         }
+
+        // The server responded without an acknowledgement for this mutation.
+        // It remains pending and eligible for a later retry, but is no longer
+        // owned by the completed request.
+        await taskDb.outbox.update(mutation.id, { inFlight: false });
       }),
     );
   });

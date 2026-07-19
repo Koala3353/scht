@@ -29,6 +29,8 @@ export interface TaskMutation {
   attempts: number;
   nextAttemptAt: number;
   syncState: TaskSyncState;
+  /** Set only while this mutation has been handed to an active transport request. */
+  inFlight?: boolean;
   syncError?: string;
   canonicalTask?: TaskView;
 }
