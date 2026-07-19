@@ -38,7 +38,8 @@ export default async function CalendarPage({
   ]);
   const profile = requireQuery(profileResult, "calendar profile");
   const preferences = requireQuery(preferencesResult, "calendar timezone preference");
-  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+  const connections = requireQuery(connectionsResult, "calendar connections") ?? [];
+  const savedProviders: Provider[] = connections.flatMap(
     (connection) => connection.provider === "google" ? ["google" as const] : [],
   );
   const timezone = calendarTimeZone(preferences?.timezone);

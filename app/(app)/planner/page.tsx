@@ -58,7 +58,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
   const projects = requireQuery(projectsResult, "task projects") ?? [];
   const categories = requireQuery(categoriesResult, "task grade categories") ?? [];
   const focusedTask = requireQuery(focusedTaskResult, "focused task");
-  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+  const connections = requireQuery(connectionsResult, "task connections") ?? [];
+  const savedProviders: Provider[] = connections.flatMap(
     (connection) => connection.provider === "google" || connection.provider === "canvas"
       ? [connection.provider]
       : [],

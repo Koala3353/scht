@@ -77,7 +77,8 @@ export default async function SubjectsPage() {
   const results = requireQuery(resultsResult, "subject assessment results") ?? [];
   const terms = requireQuery(termsResult, "subject task terms") ?? [];
   const projects = requireQuery(projectsResult, "subject task projects") ?? [];
-  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+  const connections = requireQuery(connectionsResult, "subject connections") ?? [];
+  const savedProviders: Provider[] = connections.flatMap(
     (connection) => connection.provider === "canvas" ? ["canvas" as const] : [],
   );
   const openTasksBySubject = new Map<string, ReturnType<typeof toCachedTask>[]>();

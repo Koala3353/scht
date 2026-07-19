@@ -47,7 +47,8 @@ export default async function TodayPage() {
   const terms = requireQuery(termsResult, "today terms") ?? [];
   const subjects = requireQuery(subjectsResult, "today subjects") ?? [];
   const projects = requireQuery(projectsResult, "today projects") ?? [];
-  const savedProviders: Provider[] = (connectionsResult.data ?? []).flatMap(
+  const connections = requireQuery(connectionsResult, "today connections") ?? [];
+  const savedProviders: Provider[] = connections.flatMap(
     (connection) => connection.provider === "google" || connection.provider === "canvas"
       ? [connection.provider]
       : [],
