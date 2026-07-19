@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Agenda, selectAgendaTasks } from "../../components/today/agenda";
+import { chooseFocusTask } from "../../components/today/focus-card";
 
 const currentHighWeightTask = {
   id: "current-task",
@@ -76,5 +77,14 @@ describe("Agenda", () => {
     const { container } = render(<Agenda tasks={[{ ...currentHighWeightTask, syncState: "conflict" }]} onComplete={vi.fn()} />);
 
     expect((container.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("ranks focus by deadline, priority, grade impact, then effort", () => {
+    const selected = chooseFocusTask([
+      { ...currentHighWeightTask, id: "later-high-impact", dueAt: "2026-07-21T09:00:00.000Z", priority: "high", weightPercent: 50, effortMinutes: 15 },
+      { ...currentHighWeightTask, id: "today-normal", dueAt: "2026-07-19T09:00:00.000Z", priority: "normal", weightPercent: null, effortMinutes: 120 },
+    ]);
+
+    expect(selected?.id).toBe("today-normal");
   });
 });

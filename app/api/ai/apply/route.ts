@@ -1,18 +1,49 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { TaskInputSchema } from '@/lib/validation/task';
 import { createClient } from '@/lib/supabase/server';
+
+const ApplyRequestSchema = z.object({
+  conversationId: z.string().uuid(),
+  confirmed: z.literal(true),
+  tasks: z.array(TaskInputSchema).min(1).max(50),
+});
 
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-  const body = await request.json().catch(() => null) as { conversationId?: string; confirmed?: boolean; tasks?: unknown[] } | null;
-  if (!body?.conversationId || !body.confirmed || !Array.isArray(body.tasks)) return NextResponse.json({ error: 'Every AI write requires an explicit review confirmation.' }, { status: 400 });
-  const { data: conversation } = await supabase.from('ai_conversations').select('id').eq('id', body.conversationId).eq('user_id', user.id).is('applied_at', null).maybeSingle();
+  const parsedRequest = ApplyRequestSchema.safeParse(await request.json().catch(() => null));
+  if (!parsedRequest.success) return NextResponse.json({ error: 'Every AI write requires reviewed, valid task details.' }, { status: 400 });
+  const { conversationId, tasks } = parsedRequest.data;
+  const { data: conversation } = await supabase.from('ai_conversations').select('id').eq('id', conversationId).eq('user_id', user.id).is('applied_at', null).maybeSingle();
   if (!conversation) return NextResponse.json({ error: 'Proposal is unavailable or was already applied.' }, { status: 404 });
-  const parsed = body.tasks.map((task) => TaskInputSchema.safeParse(task));
-  if (parsed.some((result) => !result.success)) return NextResponse.json({ error: 'A proposed task was invalid.' }, { status: 400 });
-  const rows = parsed.flatMap((result) => result.success ? [{ ...(result.data.id ? { id: result.data.id } : {}), user_id: user.id, title: result.data.title, kind: result.data.kind, due_at: result.data.dueAt ?? null, priority: result.data.priority, term_id: result.data.termId ?? null, subject_id: result.data.subjectId ?? null, project_id: result.data.projectId ?? null, weight_percent: result.data.weightPercent ?? null, notes: result.data.description, links: result.data.links, effort_minutes: result.data.effortMinutes ?? null, completed_at: result.data.completedAt ?? null, source: 'ai' }] : []);
+  const { data: profile } = await supabase.from('profiles').select('current_term_id').eq('id', user.id).maybeSingle();
+  const selectedTermId = profile?.current_term_id ?? null;
+  const subjectIds = [...new Set(tasks.flatMap((task) => task.subjectId ? [task.subjectId] : []))];
+  const projectIds = [...new Set(tasks.flatMap((task) => task.projectId ? [task.projectId] : []))];
+  const [subjectChecks, projectChecks] = await Promise.all([
+    Promise.all(subjectIds.map((id) => supabase.from('subjects').select('id').eq('id', id).eq('user_id', user.id).maybeSingle())),
+    Promise.all(projectIds.map((id) => supabase.from('projects').select('id').eq('id', id).eq('user_id', user.id).maybeSingle())),
+  ]);
+  if (subjectChecks.some((result) => !result.data) || projectChecks.some((result) => !result.data)) return NextResponse.json({ error: 'Choose a subject and project from your workspace.' }, { status: 400 });
+  const rows = tasks.map((task) => ({
+    ...(task.id ? { id: task.id } : {}),
+    user_id: user.id,
+    title: task.title,
+    kind: task.kind,
+    due_at: task.dueAt ?? null,
+    priority: task.priority,
+    term_id: task.termId ?? selectedTermId,
+    subject_id: task.subjectId ?? null,
+    project_id: task.projectId ?? null,
+    weight_percent: task.weightPercent ?? null,
+    notes: task.description,
+    links: task.links,
+    effort_minutes: task.effortMinutes ?? null,
+    completed_at: task.completedAt ?? null,
+    source: 'ai',
+  }));
   const { error } = await supabase.from('tasks').upsert(rows, { onConflict: 'id' });
   if (error) return NextResponse.json({ error: error.message }, { status: 502 });
   await supabase.from('ai_conversations').update({ applied_at: new Date().toISOString() }).eq('id', conversation.id);

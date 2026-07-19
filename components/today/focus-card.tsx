@@ -3,9 +3,13 @@ import { ArrowUpRight, Sparkles } from "lucide-react";
 import type { CachedTask } from "@/lib/sync/types";
 
 export function chooseFocusTask(tasks: CachedTask[]) {
-  return (
-    tasks.find((task) => (task.weightPercent ?? 0) > 0) ?? tasks[0] ?? null
-  );
+  return [...tasks].sort((first, second) =>
+    (first.dueAt ? new Date(first.dueAt).getTime() : Number.POSITIVE_INFINITY) - (second.dueAt ? new Date(second.dueAt).getTime() : Number.POSITIVE_INFINITY) ||
+    (first.priority === "high" ? 0 : first.priority === "normal" ? 1 : 2) - (second.priority === "high" ? 0 : second.priority === "normal" ? 1 : 2) ||
+    (second.weightPercent ?? 0) - (first.weightPercent ?? 0) ||
+    (first.effortMinutes ?? Number.POSITIVE_INFINITY) - (second.effortMinutes ?? Number.POSITIVE_INFINITY) ||
+    first.title.localeCompare(second.title),
+  )[0] ?? null;
 }
 
 export function FocusCard({ task }: { task: CachedTask | null }) {

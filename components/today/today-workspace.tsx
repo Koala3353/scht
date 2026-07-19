@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowRight, CheckCircle2, Cloud, Plus } from "lucide-react";
+import { ArrowRight, CheckCircle2, Cloud } from "lucide-react";
 
-import { Agenda, selectAgendaTasks } from "./agenda";
+import { selectAgendaTasks } from "./agenda";
 import { FocusCard, chooseFocusTask } from "./focus-card";
 import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "../tasks/task-types";
+import { TaskEditor, type TaskProject, type TaskSubject, type TaskTerm } from "../tasks/task-editor";
+import { TaskList } from "../tasks/task-list";
 import { taskDb } from "../../lib/sync/db";
 import { discardTaskConflict, discardTaskRecovery, enqueueTaskMutation, flushTaskOutbox, resolveRejectedTaskMutation, resolveTaskConflict, retryRejectedTaskMutation, retryTaskOutbox } from "../../lib/sync/outbox";
 import type { TaskInput } from "../../lib/validation/task";
@@ -21,6 +23,9 @@ interface TodayWorkspaceProps {
   initialTasks: CachedTask[];
   selectedTermId: string | null;
   userId: string;
+  terms?: TaskTerm[];
+  subjects?: TaskSubject[];
+  projects?: TaskProject[];
 }
 
 async function postTaskMutations(
@@ -53,10 +58,12 @@ export function TodayWorkspace({
   initialTasks,
   selectedTermId,
   userId,
+  terms = [],
+  subjects = [],
+  projects = [],
 }: TodayWorkspaceProps) {
   const [tasks, setTasks] = useState<CachedTask[]>(initialTasks);
   const [syncState, setSyncState] = useState<SyncState>("Synced");
-  const [title, setTitle] = useState("");
   const [reviewConfirmation, setReviewConfirmation] = useState<string | null>(null);
   const [rejectedEditor, setRejectedEditor] = useState<{ mutation: TaskMutation; task: CachedTask } | null>(null);
   const retryTimer = useRef<number | undefined>(undefined);
@@ -310,20 +317,12 @@ export function TodayWorkspace({
     await synchronize();
   }
 
-  async function completeTask(task: CachedTask) {
-    const updatedAt = new Date().toISOString();
-    await saveTask({ ...task, completedAt: updatedAt, updatedAt }, task.updatedAt);
-  }
-
-  async function addTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle || !selectedTermId) return;
+  function newManualTask(): CachedTask {
     const now = new Date().toISOString();
-    await saveTask({
+    return {
       id: newTaskId(),
       userId,
-      title: trimmedTitle,
+      title: "New task",
       kind: "school",
       priority: "normal",
       termId: selectedTermId,
@@ -339,8 +338,7 @@ export function TodayWorkspace({
       syncState: "pending",
       source: "manual",
       sourceId: null,
-    }, null);
-    setTitle("");
+    };
   }
 
   if (!selectedTermId) {
@@ -370,6 +368,16 @@ export function TodayWorkspace({
   const completedCount = tasks.filter(
     (task) => task.termId === selectedTermId && task.completedAt,
   ).length;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const agendaGroups = [
+    { label: "Overdue", tasks: agendaTasks.filter((task) => task.dueAt && new Date(task.dueAt) < startOfToday) },
+    { label: "Today", tasks: agendaTasks.filter((task) => task.dueAt && new Date(task.dueAt) >= startOfToday && new Date(task.dueAt) < startOfTomorrow) },
+    { label: "Upcoming", tasks: agendaTasks.filter((task) => task.dueAt && new Date(task.dueAt) >= startOfTomorrow) },
+    { label: "No deadline", tasks: agendaTasks.filter((task) => !task.dueAt) },
+  ].filter((group) => group.tasks.length > 0);
 
   return (
     <main className="pb-8">
@@ -522,27 +530,9 @@ export function TodayWorkspace({
           <h2 className="mt-2 text-xl font-black tracking-tight">
             Keep the small things visible.
           </h2>
-          <form className="mt-5 space-y-3" onSubmit={addTask}>
-            <label className="sr-only" htmlFor="new-task-title">
-              New task title
-            </label>
-            <input
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink placeholder:text-slate-600 focus:border-teal"
-              id="new-task-title"
-              maxLength={180}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Add a task for this term"
-              value={title}
-            />
-            <button
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-action px-4 py-2 font-bold text-white transition hover:bg-[#8d3909] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!title.trim()}
-              type="submit"
-            >
-              <Plus className="size-4" aria-hidden="true" />
-              Add task
-            </button>
-          </form>
+          <div className="mt-5">
+            <TaskEditor currentTermId={selectedTermId} onSave={saveTask} projects={projects} subjects={subjects} task={newManualTask()} terms={terms} />
+          </div>
           <div className="mt-6 border-t border-slate-100 pt-5">
             <p className="flex items-center gap-2 text-sm font-bold text-ink">
               <CheckCircle2 className="size-4 text-teal" aria-hidden="true" />
@@ -573,7 +563,7 @@ export function TodayWorkspace({
             Open calendar <ArrowRight className="size-4" />
           </a>
         </div>
-        <Agenda tasks={agendaTasks} onComplete={completeTask} />
+        {agendaGroups.length ? <div className="space-y-7">{agendaGroups.map((group) => <section key={group.label}><h3 className="mb-3 text-sm font-bold text-slate-600">{group.label}</h3><TaskList currentTermId={selectedTermId} onSave={saveTask} projects={projects} subjects={subjects} tasks={group.tasks} terms={terms} /></section>)}</div> : <p className="rounded-xl bg-[#f7faf9] p-4 text-sm text-slate-700">Nothing is due yet.</p>}
       </section>
     </main>
   );

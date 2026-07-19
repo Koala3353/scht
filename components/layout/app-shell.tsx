@@ -6,37 +6,30 @@ import { usePathname } from "next/navigation";
 import {
   BookOpen,
   Bot,
-  BriefcaseBusiness,
   CalendarDays,
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
-  MoreHorizontal,
-  Plus,
   Settings,
 } from "lucide-react";
 
 const desktopLinks = [
   { href: "/today", label: "Today", icon: LayoutDashboard },
-  { href: "/planner", label: "Planner", icon: ClipboardList },
+  { href: "/planner", label: "Tasks", icon: ClipboardList },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/subjects", label: "Subjects", icon: BookOpen },
   { href: "/grades", label: "Grades", icon: GraduationCap },
-  { href: "/work", label: "Work", icon: BriefcaseBusiness },
-  { href: "/ai", label: "AI workspace", icon: Bot },
+  { href: "/ai", label: "AI", icon: Bot },
 ];
 
 const mobileLinks = [
   { href: "/today", label: "Today", icon: LayoutDashboard },
-  { href: "/planner", label: "Planner", icon: ClipboardList },
-  {
-    href: "/today#new-task-title",
-    label: "Add task",
-    icon: Plus,
-    primary: true,
-  },
+  { href: "/planner", label: "Tasks", icon: ClipboardList },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
-  { href: "/settings", label: "More", icon: MoreHorizontal },
+  { href: "/subjects", label: "Subjects", icon: BookOpen },
+  { href: "/grades", label: "Grades", icon: GraduationCap },
+  { href: "/ai", label: "AI", icon: Bot },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 function isCurrent(pathname: string, href: string) {
@@ -136,20 +129,18 @@ export function AppShell({
 
       <nav
         aria-label="Mobile navigation"
-        className="fixed inset-x-3 bottom-3 z-10 grid min-h-[4.5rem] grid-cols-5 items-center rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-[0_14px_35px_rgba(20,37,51,.18)] backdrop-blur lg:hidden"
+        className="fixed inset-x-3 bottom-3 z-10 flex min-h-[4.5rem] items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-[0_14px_35px_rgba(20,37,51,.18)] backdrop-blur lg:hidden"
       >
-        {mobileLinks.map(({ href, label, icon: Icon, primary }) => {
+        {mobileLinks.map(({ href, label, icon: Icon }) => {
           const current = isCurrent(pathname, href.split("#")[0]);
           const hasAttention = hasIntegrationAttention && href === "/settings";
           return (
             <a
               aria-current={current ? "page" : undefined}
-              className={`grid min-h-14 min-w-11 place-items-center rounded-xl px-1 text-center text-[11px] font-bold leading-tight transition ${
-                primary
-                  ? "bg-action text-white shadow-sm"
-                  : current
-                    ? "bg-[#e6f2f0] text-teal"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-ink"
+              className={`grid min-h-14 min-w-[3.5rem] flex-1 place-items-center rounded-xl px-1 text-center text-[11px] font-bold leading-tight transition ${
+                current
+                  ? "bg-[#e6f2f0] text-teal"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-ink"
               }`}
               href={href}
               key={label}

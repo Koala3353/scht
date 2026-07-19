@@ -25,16 +25,19 @@ export function selectAgendaTasks(tasks: CachedTask[], currentTermId: string) {
         dueTimestamp(first) - dueTimestamp(second) ||
         priorityWeight(first) - priorityWeight(second) ||
         (second.weightPercent ?? 0) - (first.weightPercent ?? 0) ||
+        (first.effortMinutes ?? Number.POSITIVE_INFINITY) - (second.effortMinutes ?? Number.POSITIVE_INFINITY) ||
         first.title.localeCompare(second.title),
     );
 }
 
 function formatDueTime(dueAt: string | null | undefined) {
-  if (!dueAt) return "Any time";
-  return new Intl.DateTimeFormat(undefined, {
+  if (!dueAt) return "No deadline";
+  return `${new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+  }).format(new Date(dueAt))} · ${new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(dueAt));
+  }).format(new Date(dueAt))}`;
 }
 
 export function Agenda({ tasks, onComplete }: AgendaProps) {
