@@ -3,6 +3,7 @@ import { AiVaultPanel } from "@/components/settings/ai-vault-panel";
 import { AcademicScalePanel } from "@/components/settings/academic-scale-panel";
 import { IntegrationsPanel } from "@/components/settings/integrations-panel";
 import { ReminderPanel } from "@/components/settings/reminder-panel";
+import { SettingsNavigation } from "@/components/settings/settings-navigation";
 import { requireUser } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
 
@@ -30,18 +31,29 @@ export default async function SettingsPage() {
         .eq("id", user.id)
         .maybeSingle(),
     ]);
+
   return (
-    <main>
-      <PageHeader eyebrow="SETTINGS" title="Your workspace controls">
-        Connections expose a clear status: connected, syncing, needs
-        reauthorization, or error.
-      </PageHeader>
-      <IntegrationsPanel />
-      <AiVaultPanel />
-      <AcademicScalePanel
-        academicScale={profile?.academic_scale === "gpa" ? "gpa" : "qpi"}
-      />
-      <ReminderPanel preference={preference} tasks={tasks ?? []} />
+    <main className="pb-8">
+      <div className="max-w-3xl">
+        <PageHeader
+          eyebrow="Workspace settings"
+          title="Make Scht work your way."
+        >
+          Manage the few connections and preferences that shape your workspace.
+          Each service remains separate, transparent, and under your control.
+        </PageHeader>
+      </div>
+      <div className="mt-8 max-w-6xl">
+        <SettingsNavigation />
+        <div className="mt-8 space-y-10">
+          <IntegrationsPanel />
+          <AiVaultPanel />
+          <AcademicScalePanel
+            academicScale={profile?.academic_scale === "gpa" ? "gpa" : "qpi"}
+          />
+          <ReminderPanel preference={preference} tasks={tasks ?? []} />
+        </div>
+      </div>
     </main>
   );
 }

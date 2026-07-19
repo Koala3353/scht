@@ -1,15 +1,52 @@
-import { Sparkles } from 'lucide-react';
+import { ArrowUpRight, Sparkles } from "lucide-react";
 
-import type { CachedTask } from '@/lib/sync/types';
+import type { CachedTask } from "@/lib/sync/types";
 
 export function chooseFocusTask(tasks: CachedTask[]) {
-  return tasks.find((task) => (task.weightPercent ?? 0) > 0) ?? tasks[0] ?? null;
+  return (
+    tasks.find((task) => (task.weightPercent ?? 0) > 0) ?? tasks[0] ?? null
+  );
 }
 
 export function FocusCard({ task }: { task: CachedTask | null }) {
   if (!task) {
-    return <div className="mt-5 rounded-2xl border border-teal/20 bg-teal/5 p-4"><p className="font-bold">Your day is clear.</p><p className="mt-1 text-sm text-teal-900">Add a task when you are ready and Scht will keep it in sync.</p></div>;
+    return (
+      <section className="rounded-[1.5rem] border border-dashed border-teal/30 bg-white p-6 sm:p-7">
+        <Sparkles className="size-5 text-teal" aria-hidden="true" />
+        <h2 className="mt-5 text-xl font-black tracking-tight">
+          Your day has room to breathe.
+        </h2>
+        <p className="mt-2 max-w-md leading-7 text-slate-700">
+          Add the next thing that matters. It will remain available when you are
+          offline and return when you are ready.
+        </p>
+      </section>
+    );
   }
 
-  return <div className="mt-5 flex gap-3 rounded-2xl border border-teal/20 bg-teal/5 p-4"><Sparkles className="mt-0.5 shrink-0 text-teal" aria-hidden="true" /><div><b>Start with {task.title}</b><p className="text-sm text-teal-900">{task.weightPercent ? `Worth ${task.weightPercent}% of your course grade` : task.priority === 'high' ? 'High-priority work' : 'Your next scheduled task'}</p></div></div>;
+  return (
+    <section className="rounded-[1.5rem] bg-[#083f42] p-6 text-white shadow-[0_18px_40px_rgba(7,63,66,.18)] sm:p-7">
+      <div className="flex items-start justify-between gap-5">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-bold text-[#c7e6dd]">
+            <Sparkles className="size-4" aria-hidden="true" />
+            Best next move
+          </p>
+          <h2 className="mt-5 max-w-xl text-2xl font-black tracking-[-0.025em] text-wrap-balance sm:text-3xl">
+            {task.title}
+          </h2>
+        </div>
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/10 text-[#f3b68b]">
+          <ArrowUpRight className="size-5" aria-hidden="true" />
+        </span>
+      </div>
+      <p className="mt-4 max-w-xl leading-7 text-[#d7ebe7]">
+        {task.weightPercent
+          ? `Worth ${task.weightPercent}% of your course grade.`
+          : task.priority === "high"
+            ? "High-priority work that deserves your first focused block."
+            : "The closest scheduled task in your current term."}
+      </p>
+    </section>
+  );
 }

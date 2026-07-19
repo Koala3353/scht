@@ -1,38 +1,209 @@
-'use client';
+"use client";
 
-import { FormEvent, useState } from 'react';
-import { encryptVault, decryptVault, type EncryptedVault } from '@/lib/ai/vault';
-import { createClient } from '@/lib/supabase/client';
+import { useState, type FormEvent } from "react";
+import { KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
+import {
+  decryptVault,
+  encryptVault,
+  type EncryptedVault,
+} from "@/lib/ai/vault";
+import { createClient } from "@/lib/supabase/client";
 
-function toBytea(bytes: Uint8Array) { return `\\x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`; }
-function fromBytea(value: string) { const encoded = value.startsWith('\\x') ? value.slice(2) : value; return Uint8Array.from(encoded.match(/.{1,2}/g) ?? [], (chunk) => Number.parseInt(chunk, 16)); }
-const sessionVaultKey = 'scht-unlocked-ai-keys';
+function toBytea(bytes: Uint8Array) {
+  return `\\x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function fromBytea(value: string) {
+  const encoded = value.startsWith("\\x") ? value.slice(2) : value;
+  return Uint8Array.from(encoded.match(/.{1,2}/g) ?? [], (chunk) =>
+    Number.parseInt(chunk, 16),
+  );
+}
+
+const sessionVaultKey = "scht-unlocked-ai-keys";
 
 export function AiVaultPanel() {
-  const [provider, setProvider] = useState<'openai' | 'hackclub'>('openai'); const [apiKey, setApiKey] = useState(''); const [passphrase, setPassphrase] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
+  const [provider, setProvider] = useState<"openai" | "hackclub">("openai");
+  const [apiKey, setApiKey] = useState("");
+  const [passphrase, setPassphrase] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
   async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setNotice('');
+    event.preventDefault();
+    setBusy(true);
+    setNotice("");
     try {
-      const supabase = createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) throw new Error('Sign in again before saving your vault.');
-      const { data: existing, error: existingError } = await supabase.from('encrypted_ai_vaults').select('ciphertext, salt, iv').eq('user_id', user.id).maybeSingle(); if (existingError) throw existingError;
-      const savedValues = existing ? await decryptVault(passphrase, { ciphertext: fromBytea(existing.ciphertext), salt: fromBytea(existing.salt), iv: fromBytea(existing.iv) } satisfies EncryptedVault) : {};
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sign in again before saving your vault.");
+      const { data: existing, error: existingError } = await supabase
+        .from("encrypted_ai_vaults")
+        .select("ciphertext, salt, iv")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (existingError) throw existingError;
+      const savedValues = existing
+        ? await decryptVault(passphrase, {
+            ciphertext: fromBytea(existing.ciphertext),
+            salt: fromBytea(existing.salt),
+            iv: fromBytea(existing.iv),
+          } satisfies EncryptedVault)
+        : {};
       const values = { ...savedValues, [provider]: apiKey };
       const encrypted = await encryptVault(passphrase, values);
       sessionStorage.setItem(sessionVaultKey, JSON.stringify(values));
-      const { error } = await supabase.from('encrypted_ai_vaults').upsert({ user_id: user.id, ciphertext: toBytea(encrypted.ciphertext), salt: toBytea(encrypted.salt), iv: toBytea(encrypted.iv) }, { onConflict: 'user_id' });
-      if (error) throw error; setApiKey(''); setPassphrase(''); setNotice('Your API key is encrypted in your personal vault and unlocked for this browser tab.');
-    } catch (error) { setNotice(error instanceof Error ? error.message : 'Could not save the encrypted vault.'); }
+      const { error } = await supabase.from("encrypted_ai_vaults").upsert(
+        {
+          user_id: user.id,
+          ciphertext: toBytea(encrypted.ciphertext),
+          salt: toBytea(encrypted.salt),
+          iv: toBytea(encrypted.iv),
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) throw error;
+      setApiKey("");
+      setPassphrase("");
+      setNotice("Your API key is encrypted and unlocked for this browser tab.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Could not save the encrypted vault.",
+      );
+    }
     setBusy(false);
   }
+
   async function verify() {
-    setBusy(true); setNotice('');
+    setBusy(true);
+    setNotice("");
     try {
-      const supabase = createClient(); const { data: { user } } = await supabase.auth.getUser(); if (!user) throw new Error('Sign in again before unlocking your vault.');
-      const { data, error } = await supabase.from('encrypted_ai_vaults').select('ciphertext, salt, iv').eq('user_id', user.id).maybeSingle(); if (error) throw error; if (!data) throw new Error('No encrypted AI vault has been saved yet.');
-      const values = await decryptVault(passphrase, { ciphertext: fromBytea(data.ciphertext), salt: fromBytea(data.salt), iv: fromBytea(data.iv) } satisfies EncryptedVault);
-      sessionStorage.setItem(sessionVaultKey, JSON.stringify(values)); setNotice(`Vault unlocked for this browser tab. Saved providers: ${Object.keys(values).join(', ')}.`); setPassphrase('');
-    } catch { setNotice('The passphrase did not unlock this vault.'); }
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sign in again before unlocking your vault.");
+      const { data, error } = await supabase
+        .from("encrypted_ai_vaults")
+        .select("ciphertext, salt, iv")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("No encrypted AI vault has been saved yet.");
+      const values = await decryptVault(passphrase, {
+        ciphertext: fromBytea(data.ciphertext),
+        salt: fromBytea(data.salt),
+        iv: fromBytea(data.iv),
+      } satisfies EncryptedVault);
+      sessionStorage.setItem(sessionVaultKey, JSON.stringify(values));
+      setNotice(
+        `Vault unlocked for this browser tab. Saved providers: ${Object.keys(values).join(", ")}.`,
+      );
+      setPassphrase("");
+    } catch {
+      setNotice("The passphrase did not unlock this vault.");
+    }
     setBusy(false);
   }
-  return <section className="mt-5 max-w-5xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-lg font-bold">Encrypted AI key vault</h2><p className="mt-1 text-sm text-slate-600">Your provider key is encrypted in the browser with your passphrase before it reaches Supabase. Scht cannot recover a forgotten passphrase.</p><form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={save}><label className="text-sm font-semibold">Provider<select className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" onChange={(event) => setProvider(event.target.value as 'openai' | 'hackclub')} value={provider}><option value="openai">OpenAI</option><option value="hackclub">Hack Club AI</option></select></label><label className="text-sm font-semibold">Provider API key<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" onChange={(event) => setApiKey(event.target.value)} required type="password" value={apiKey} /></label><label className="text-sm font-semibold">Vault passphrase<input className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" minLength={12} onChange={(event) => setPassphrase(event.target.value)} required type="password" value={passphrase} /></label><div className="flex flex-wrap items-end gap-3"><button className="rounded-xl bg-action px-4 py-2 font-bold text-white disabled:opacity-60" disabled={busy} type="submit">Encrypt and save key</button><button className="rounded-xl border border-teal px-4 py-2 font-bold text-teal disabled:opacity-60" disabled={busy || !passphrase} onClick={() => void verify()} type="button">Verify passphrase</button></div></form>{notice && <p className="mt-3 text-sm text-slate-700" role="status">{notice}</p>}</section>;
+
+  return (
+    <section aria-labelledby="ai-vault-heading" id="ai-vault">
+      <div className="grid gap-5 rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-[.8fr_1.2fr] lg:p-7">
+        <div>
+          <span className="grid size-11 place-items-center rounded-xl bg-[#e8eef9] text-[#345d9d]">
+            <KeyRound className="size-5" aria-hidden="true" />
+          </span>
+          <p className="mt-5 text-sm font-semibold text-teal">AI vault</p>
+          <h2
+            className="mt-1 text-2xl font-black tracking-tight"
+            id="ai-vault-heading"
+          >
+            Bring your own key, keep your boundary.
+          </h2>
+          <p className="mt-3 max-w-md leading-7 text-slate-700">
+            Your provider key is encrypted in the browser before it reaches
+            Supabase. Scht cannot recover a forgotten passphrase.
+          </p>
+          <p className="mt-5 flex items-start gap-2 text-sm font-semibold leading-6 text-[#345d9d]">
+            <ShieldCheck
+              className="mt-0.5 size-4 shrink-0"
+              aria-hidden="true"
+            />
+            AI only makes proposals. You review every task before it reaches
+            your planner.
+          </p>
+        </div>
+
+        <form
+          className="grid content-start gap-4 sm:grid-cols-2"
+          onSubmit={save}
+        >
+          <label className="text-sm font-bold text-ink">
+            Provider
+            <select
+              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
+              onChange={(event) =>
+                setProvider(event.target.value as "openai" | "hackclub")
+              }
+              value={provider}
+            >
+              <option value="openai">OpenAI</option>
+              <option value="hackclub">Hack Club AI</option>
+            </select>
+          </label>
+          <label className="text-sm font-bold text-ink">
+            Provider API key
+            <input
+              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
+              onChange={(event) => setApiKey(event.target.value)}
+              required
+              type="password"
+              value={apiKey}
+            />
+          </label>
+          <label className="text-sm font-bold text-ink sm:col-span-2">
+            Vault passphrase
+            <input
+              className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
+              minLength={12}
+              onChange={(event) => setPassphrase(event.target.value)}
+              required
+              type="password"
+              value={passphrase}
+            />
+          </label>
+          <div className="flex flex-wrap gap-3 sm:col-span-2">
+            <button
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-action px-4 py-2 font-bold text-white transition hover:bg-[#8d3909] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={busy}
+              type="submit"
+            >
+              <LockKeyhole className="size-4" aria-hidden="true" />
+              Encrypt and save
+            </button>
+            <button
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={busy || !passphrase}
+              onClick={() => void verify()}
+              type="button"
+            >
+              Verify passphrase
+            </button>
+          </div>
+        </form>
+      </div>
+      {notice && (
+        <p
+          className="mt-4 rounded-xl bg-[#e6f2f0] px-4 py-3 text-sm font-semibold text-teal"
+          role="status"
+        >
+          {notice}
+        </p>
+      )}
+    </section>
+  );
 }
