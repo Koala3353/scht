@@ -79,8 +79,26 @@ describe("academic task context", () => {
   });
 
   it("shows a subject's open task on its subject-card queue", () => {
-    render(<SubjectTaskQueue tasks={[weightedTask]} />);
+    const queuedTask: CachedTask = {
+      ...weightedTask,
+      userId: "0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f",
+      syncState: "synced",
+    };
+    render(
+      <SubjectTaskQueue
+        approvedCategoryLabels={["Reflections"]}
+        currentTermId={termId}
+        initialTasks={[queuedTask]}
+        projects={[]}
+        representedSubjectId={subjectId}
+        subjects={[{ id: subjectId, label: "MATH 121 · Quantitative reasoning", termId }]}
+        terms={[{ id: termId, label: "Fall 2026" }]}
+      />,
+    );
 
-    expect(screen.getByRole("link", { name: "Open task Submit weighted reflection" })).not.toBeNull();
+    expect(screen.getByText("Submit weighted reflection")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Complete Submit weighted reflection" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Copy AI starter prompt" })).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Open task workspace" }).getAttribute("href")).toBe(`/planner?task=${weightedTask.id}`);
   });
 });
