@@ -62,7 +62,32 @@ export function TodayWorkspace({
   subjects = [],
   projects = [],
 }: TodayWorkspaceProps) {
+  function newManualTask(): CachedTask {
+    const now = new Date().toISOString();
+    return {
+      id: newTaskId(),
+      userId,
+      title: "New task",
+      kind: "school",
+      priority: "normal",
+      termId: null,
+      dueAt: null,
+      subjectId: null,
+      projectId: null,
+      weightPercent: null,
+      description: "",
+      links: [],
+      effortMinutes: null,
+      completedAt: null,
+      updatedAt: now,
+      syncState: "pending",
+      source: "manual",
+      sourceId: null,
+    };
+  }
+
   const [tasks, setTasks] = useState<CachedTask[]>(initialTasks);
+  const [quickCaptureTask, setQuickCaptureTask] = useState<CachedTask>(() => newManualTask());
   const [syncState, setSyncState] = useState<SyncState>("Synced");
   const [reviewConfirmation, setReviewConfirmation] = useState<string | null>(null);
   const [rejectedEditor, setRejectedEditor] = useState<{ mutation: TaskMutation; task: CachedTask } | null>(null);
@@ -317,28 +342,9 @@ export function TodayWorkspace({
     await synchronize();
   }
 
-  function newManualTask(): CachedTask {
-    const now = new Date().toISOString();
-    return {
-      id: newTaskId(),
-      userId,
-      title: "New task",
-      kind: "school",
-      priority: "normal",
-      termId: null,
-      dueAt: null,
-      subjectId: null,
-      projectId: null,
-      weightPercent: null,
-      description: "",
-      links: [],
-      effortMinutes: null,
-      completedAt: null,
-      updatedAt: now,
-      syncState: "pending",
-      source: "manual",
-      sourceId: null,
-    };
+  async function saveQuickCapture(task: CachedTask, baseUpdatedAt: string | null) {
+    await saveTask(task, baseUpdatedAt);
+    setQuickCaptureTask(newManualTask());
   }
 
   if (!selectedTermId) {
@@ -531,7 +537,7 @@ export function TodayWorkspace({
             Keep the small things visible.
           </h2>
           <div className="mt-5">
-            <TaskEditor baseUpdatedAt={null} currentTermId={selectedTermId} defaultToCurrentTerm onSave={saveTask} projects={projects} subjects={subjects} task={newManualTask()} terms={terms} />
+            <TaskEditor baseUpdatedAt={null} currentTermId={selectedTermId} defaultToCurrentTerm key={quickCaptureTask.id} onSave={saveQuickCapture} projects={projects} subjects={subjects} task={quickCaptureTask} terms={terms} />
           </div>
           <div className="mt-6 border-t border-slate-100 pt-5">
             <p className="flex items-center gap-2 text-sm font-bold text-ink">

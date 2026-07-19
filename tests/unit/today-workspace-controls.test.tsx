@@ -140,19 +140,29 @@ describe('TodayWorkspace sync review controls', () => {
     vi.unstubAllGlobals();
   });
 
-  it('queues a fresh manual capture as a create mutation without a server revision', async () => {
+  it('queues consecutive manual captures as distinct create mutations without navigating', async () => {
     const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [] }) }));
     vi.stubGlobal('fetch', fetchMock);
     render(<TodayWorkspace initialTasks={[]} selectedTermId={termId} userId={userId} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Save task' }));
+    await waitFor(() => expect(outbox.size).toBe(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Save task' }));
 
-    await waitFor(() => expect([...outbox.values()]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ baseUpdatedAt: null, payload: expect.objectContaining({ title: 'New task' }) }),
-    ])));
+    await waitFor(() => expect(outbox.size).toBe(2));
+    const captures = [...outbox.values()].filter((mutation) => mutation.payload.title === 'New task');
+    expect(captures).toHaveLength(2);
+    expect(captures.map((mutation) => mutation.baseUpdatedAt)).toEqual([null, null]);
+    expect(new Set(captures.map((mutation) => mutation.payload.id)).size).toBe(2);
     await waitFor(() => {
-      const createRequest = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)) as { mutations?: Array<{ baseUpdatedAt: string | null }> }).find((body) => body.mutations?.length);
-      expect(createRequest?.mutations?.[0]?.baseUpdatedAt).toBeNull();
+      const submittedCaptures = fetchMock.mock.calls
+        .flatMap((call) => (JSON.parse(String(call[1]?.body)) as { mutations?: Array<{ baseUpdatedAt: string | null; payload: { id: string; title: string } }> }).mutations ?? [])
+        .filter((mutation) => mutation.payload.title === 'New task');
+      expect(submittedCaptures).toEqual(expect.arrayContaining([
+        expect.objectContaining({ baseUpdatedAt: null }),
+        expect.objectContaining({ baseUpdatedAt: null }),
+      ]));
+      expect(new Set(submittedCaptures.map((mutation) => mutation.payload.id)).size).toBe(2);
     });
     vi.unstubAllGlobals();
   });
