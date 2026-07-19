@@ -7,7 +7,10 @@ import { requireOwnerAdmin } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AdminPage() {
-  await requireOwnerAdmin();
+  await requireOwnerAdmin({
+    unauthenticatedRedirect: "/admin/sign-in?error=sign-in-required",
+    unauthorizedRedirect: "/admin/sign-in?error=not-owner",
+  });
   const supabase = await createClient();
   const [
     { count: activeUsers },

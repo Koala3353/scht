@@ -72,7 +72,7 @@ describe('requireOwnerAdmin', () => {
     expect(mocks.forbidden).not.toHaveBeenCalled();
   });
 
-  it('seeds only the development demo account as an owner admin', () => {
+  it('seeds only the development demo account as an owner admin and gives the portal a dedicated sign-in path', () => {
     const testDirectory = path.dirname(fileURLToPath(import.meta.url));
     const demoRoute = readFileSync(
       path.resolve(testDirectory, '../../app/api/dev/demo-login/route.ts'),
@@ -85,6 +85,8 @@ describe('requireOwnerAdmin', () => {
 
     expect(demoRoute).toContain("role: 'owner_admin'");
     expect(demoRoute).toContain("process.env.NODE_ENV === 'development'");
-    expect(adminPage).toContain('await requireOwnerAdmin()');
+    expect(adminPage).toContain('await requireOwnerAdmin({');
+    expect(adminPage).toContain('unauthenticatedRedirect: "/admin/sign-in?error=sign-in-required"');
+    expect(adminPage).toContain('unauthorizedRedirect: "/admin/sign-in?error=not-owner"');
   });
 });

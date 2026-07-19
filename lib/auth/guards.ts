@@ -9,7 +9,14 @@ export interface AuthenticatedUser {
   role: UserRole;
 }
 
-export async function requireUser(): Promise<AuthenticatedUser> {
+interface AuthRedirectOptions {
+  unauthenticatedRedirect?: string;
+  unauthorizedRedirect?: string;
+}
+
+export async function requireUser(
+  options: AuthRedirectOptions = {},
+): Promise<AuthenticatedUser> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,7 +24,7 @@ export async function requireUser(): Promise<AuthenticatedUser> {
   } = await supabase.auth.getUser();
 
   if (userError || !user) {
-    redirect('/');
+    redirect(options.unauthenticatedRedirect ?? '/');
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -28,16 +35,20 @@ export async function requireUser(): Promise<AuthenticatedUser> {
 
   const role = profile?.role;
   if (profileError || (role !== 'member' && role !== 'owner_admin')) {
+    if (options.unauthorizedRedirect) redirect(options.unauthorizedRedirect);
     forbidden();
   }
 
   return { id: user.id, role };
 }
 
-export async function requireOwnerAdmin(): Promise<AuthenticatedUser> {
-  const user = await requireUser();
+export async function requireOwnerAdmin(
+  options: AuthRedirectOptions = {},
+): Promise<AuthenticatedUser> {
+  const user = await requireUser(options);
 
   if (user.role !== 'owner_admin') {
+    if (options.unauthorizedRedirect) redirect(options.unauthorizedRedirect);
     forbidden();
   }
 

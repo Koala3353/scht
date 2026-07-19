@@ -12,19 +12,29 @@ function redirectTo(request: NextRequest, path: string, clearGooglePending = fal
 
 export async function GET(request: NextRequest) {
   const isGoogleIntegration = request.nextUrl.searchParams.get("integration") === "google" || request.cookies.get(pendingCookie)?.value === "1";
+  const isAdminPortalSignIn = request.nextUrl.searchParams.get("next") === "/admin";
+  const authFailurePath = (reason: string) => {
+    if (isGoogleIntegration) return "/settings?integration=google-error";
+    if (isAdminPortalSignIn) return `/admin/sign-in?error=${reason}`;
+    return `/?error=${reason}`;
+  };
+  const providerError = request.nextUrl.searchParams.get("error");
+  if (providerError) {
+    return redirectTo(request, authFailurePath("google-access-denied"), isGoogleIntegration);
+  }
   const code = request.nextUrl.searchParams.get('code');
-  if (!code) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=missing-auth-code', isGoogleIntegration);
+  if (!code) return redirectTo(request, authFailurePath('missing-auth-code'), isGoogleIntegration);
 
   const supabase = await createClient();
   const { data: authData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-  if (exchangeError) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=authentication-failed', isGoogleIntegration);
+  if (exchangeError) return redirectTo(request, authFailurePath('authentication-failed'), isGoogleIntegration);
 
   const user = authData.user;
   const session = authData.session;
-  if (!user) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=authentication-failed', isGoogleIntegration);
+  if (!user) return redirectTo(request, authFailurePath('authentication-failed'), isGoogleIntegration);
 
   const { data: accepted, error: inviteError } = await supabase.rpc('accept_invite_for_current_user');
-  if (inviteError) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
+  if (inviteError) return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
@@ -33,7 +43,7 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
   if (profileError || !profile) {
     await supabase.auth.signOut();
-    return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
+    return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
   }
 
   if (profile.role !== 'owner_admin' && !accepted) {
@@ -48,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     if (inviteLookupError || invite?.accepted_by !== user.id || !invite.accepted_at) {
       await supabase.auth.signOut();
-      return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
+      return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
     }
   }
 
@@ -71,6 +81,13 @@ export async function GET(request: NextRequest) {
         last_synced_at: null,
       }, { onConflict: 'user_id,provider' });
     return redirectTo(request, saveError ? '/settings?integration=google-error' : '/settings?integration=google-connected', true);
+  }
+
+  if (isAdminPortalSignIn) {
+    if (profile.role !== 'owner_admin') {
+      return redirectTo(request, '/admin/sign-in?error=not-owner');
+    }
+    return redirectTo(request, '/admin');
   }
 
   return redirectTo(request, profile.onboarding_completed_at ? '/today' : '/onboarding');
