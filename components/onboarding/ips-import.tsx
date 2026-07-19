@@ -53,10 +53,16 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [programYear, setProgramYear] = useState(1);
   const parsed = useMemo(() => inspectIps(input), [input]);
+  const programYears = useMemo(
+    () => [...new Set(parsed.rows.map((row) => row.programYear))].sort((left, right) => left - right),
+    [parsed.rows],
+  );
+  const selectedProgramYear = programYears.includes(programYear) ? programYear : (programYears[0] ?? 1);
   const selectedRows = useMemo(
-    () => parsed.rows.filter((row) => row.academicYear === academicYear && row.term === termName),
-    [academicYear, parsed.rows, termName],
+    () => parsed.rows.filter((row) => row.programYear === selectedProgramYear && row.term === termName),
+    [parsed.rows, selectedProgramYear, termName],
   );
 
   async function importCourses() {
@@ -78,7 +84,7 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
       selectedRows.map((row) => ({
         user_id: userData.user.id,
         term_id: termId,
-        academic_year: row.academicYear,
+        academic_year: academicYear,
         term: row.term,
         status: row.status,
         course_code: row.courseCode,
@@ -102,7 +108,15 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
     <p className="mt-3 text-slate-600">Your selected term is <strong>{termLabel}</strong>. Paste the tabular portion of your IPS below; nothing is saved until you import the preview.</p>
     <label className="mt-6 block text-sm font-semibold" htmlFor="ips-input">Paste IPS</label>
     <textarea className="mt-2 min-h-48 w-full rounded-xl border border-slate-300 p-3 font-mono text-sm" id="ips-input" onChange={(event) => setInput(event.target.value)} placeholder={'First Year\nFirst Semester\nP ENLIT 12 3 C Y N'} value={input} />
-    <p aria-live="polite" className="mt-3 text-sm text-slate-600">Parsed {parsed.rows.length} course{parsed.rows.length === 1 ? '' : 's'} · {parsed.invalidLineCount} invalid line{parsed.invalidLineCount === 1 ? '' : 's'} · Showing {selectedRows.length} for {termLabel}</p>
+    {programYears.length > 0 && (
+      <label className="mt-4 block max-w-xs text-sm font-semibold" htmlFor="program-year">
+        Program year
+        <select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-ink" id="program-year" onChange={(event) => setProgramYear(Number(event.target.value))} value={selectedProgramYear}>
+          {programYears.map((year) => <option key={year} value={year}>Year {year}</option>)}
+        </select>
+      </label>
+    )}
+    <p aria-live="polite" className="mt-3 text-sm text-slate-600">Parsed {parsed.rows.length} course{parsed.rows.length === 1 ? '' : 's'} · {parsed.invalidLineCount} invalid line{parsed.invalidLineCount === 1 ? '' : 's'} · Showing {selectedRows.length} for Year {selectedProgramYear} · {termLabel}</p>
     <PreviewRows rows={selectedRows} />
     <button className="mt-6 min-h-11 rounded-xl bg-orange px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={isImporting || selectedRows.length === 0} onClick={importCourses} type="button">
       {isImporting ? 'Importing…' : `Import ${selectedRows.length} courses`}

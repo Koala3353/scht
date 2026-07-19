@@ -3,11 +3,11 @@ import { inspectIps, parseIps } from '../../lib/curriculum/ips-parser';
 
 describe('parseIps', () => {
   it('parses semester rows and ignores total/unit summary lines', () => {
-    const rows = parseIps('First Year\nFirst Semester\nP ENLIT 12 3 C Y N\nUnits Taken: 23.00');
+    const rows = parseIps('First Year\nFirst Semester\nStatus Category No Units Category Required? Override Prerequisite?\nP ENLIT 12 3 C Y N\nUnits Taken: 23.00');
 
     expect(rows).toEqual([
       expect.objectContaining({
-        academicYear: 1,
+        programYear: 1,
         term: 'First Semester',
         courseCode: 'ENLIT 12',
         units: 3,
@@ -27,7 +27,7 @@ describe('parseIps', () => {
 
     expect(rows).toEqual([
       {
-        academicYear: 2,
+        programYear: 2,
         term: 'Intersession',
         status: 'P',
         courseCode: 'NSTP 11(CWTS)',
@@ -37,7 +37,7 @@ describe('parseIps', () => {
         prerequisiteOverride: false,
       },
       {
-        academicYear: 2,
+        programYear: 2,
         term: 'Second Semester',
         status: 'C',
         courseCode: 'ANALYTICS ELECTIVE',

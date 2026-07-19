@@ -1,7 +1,7 @@
 import type { AcademicTermName } from './types';
 
 export interface ParsedCurriculumItem {
-  academicYear: number;
+  programYear: number;
   term: AcademicTermName;
   status: string;
   courseCode: string;
@@ -37,10 +37,10 @@ function parseBoolean(value: string): boolean | null {
 
 function parseRow(
   line: string,
-  academicYear: number | null,
+  programYear: number | null,
   term: AcademicTermName | null,
 ): ParsedCurriculumItem | null {
-  if (academicYear === null || term === null) return null;
+  if (programYear === null || term === null) return null;
 
   const tokens = line.trim().split(/\s+/);
   if (tokens.length < 6) return null;
@@ -65,7 +65,7 @@ function parseRow(
   }
 
   return {
-    academicYear,
+    programYear,
     term,
     status,
     courseCode,
@@ -89,7 +89,7 @@ export function inspectIps(input: string): IpsParseResult {
 
   for (const rawLine of input.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line || /^Units Taken\s*:/i.test(line)) continue;
+    if (!line || /^Units Taken\s*:/i.test(line) || /^Status\b.*\bUnits\b.*\bRequired\?/i.test(line)) continue;
 
     const yearMatch = /^(First|Second|Third|Fourth)\s+Year$/i.exec(line);
     if (yearMatch) {
