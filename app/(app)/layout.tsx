@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { CurrentTermControl } from "@/components/layout/current-term-control";
 import { OwnerAdminLink } from "@/components/layout/owner-admin-link";
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { requireUser } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
 import type { AcademicTermName } from "@/lib/curriculum/types";
@@ -51,6 +52,7 @@ export default async function AuthenticatedLayout({
     <div className="flex items-center justify-between gap-3 sm:justify-end">
       {user.role === "owner_admin" ? <OwnerAdminLink /> : null}
       <div className="min-w-0">{termControl}</div>
+      <SignOutButton />
     </div>
   );
 
