@@ -1,0 +1,90 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { Agenda, selectAgendaTasks } from "../../components/today/agenda";
+import { chooseFocusTask } from "../../components/today/focus-card";
+
+const currentHighWeightTask = {
+  id: "current-task",
+  userId: "0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f",
+  title: "Quant 121 — problem set",
+  kind: "school" as const,
+  termId: "current-term",
+  dueAt: "2026-07-18T12:00:00.000Z",
+  priority: "high" as const,
+  weightPercent: 25,
+  subjectId: null,
+  projectId: null,
+  description: "",
+  links: [],
+  effortMinutes: null,
+  completedAt: null,
+  updatedAt: "2026-07-18T08:00:00.000Z",
+  syncState: "synced" as const,
+  source: "manual",
+  sourceId: null,
+};
+
+describe("Agenda", () => {
+  it("shows only current-term tasks and marks high-weight work", () => {
+    const visibleTasks = selectAgendaTasks(
+      [
+        currentHighWeightTask,
+        {
+          ...currentHighWeightTask,
+          id: "past-task",
+          title: "Previous term reading",
+          termId: "previous-term",
+        },
+      ],
+      "current-term",
+    );
+
+    render(<Agenda tasks={visibleTasks} onComplete={vi.fn()} />);
+
+    expect(screen.getByText("Quant 121 — problem set")).not.toBeNull();
+    expect(screen.getByText("Grade impact · 25%")).not.toBeNull();
+    expect(screen.queryByText("Previous term reading")).toBeNull();
+  });
+
+  it("orders incomplete tasks by due date, priority, then course weight", () => {
+    const tasks = selectAgendaTasks(
+      [
+        {
+          ...currentHighWeightTask,
+          id: "later",
+          dueAt: "2026-07-19T09:00:00.000Z",
+        },
+        {
+          ...currentHighWeightTask,
+          id: "early",
+          dueAt: "2026-07-18T09:00:00.000Z",
+        },
+        {
+          ...currentHighWeightTask,
+          id: "done",
+          title: "Already complete",
+          completedAt: "2026-07-18T08:00:00.000Z",
+        },
+      ],
+      "current-term",
+    );
+
+    expect(tasks.map((task) => task.id)).toEqual(["early", "later"]);
+  });
+
+  it("disables completion for a task that needs conflict review", () => {
+    const { container } = render(<Agenda tasks={[{ ...currentHighWeightTask, syncState: "conflict" }]} onComplete={vi.fn()} />);
+
+    expect((container.querySelector("button") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("ranks focus by deadline, priority, grade impact, then effort", () => {
+    const selected = chooseFocusTask([
+      { ...currentHighWeightTask, id: "later-high-impact", dueAt: "2026-07-21T09:00:00.000Z", priority: "high", weightPercent: 50, effortMinutes: 15 },
+      { ...currentHighWeightTask, id: "today-normal", dueAt: "2026-07-19T09:00:00.000Z", priority: "normal", weightPercent: null, effortMinutes: 120 },
+    ]);
+
+    expect(selected?.id).toBe("today-normal");
+  });
+});

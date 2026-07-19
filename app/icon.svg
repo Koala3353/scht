@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Scht logo</title>
+  <desc id="description">A calm academic planner mark built from a flowing S-shaped schedule path.</desc>
+  <rect width="512" height="512" rx="116" fill="#063f42"/>
+  <path d="M350 145H224c-42 0-72 30-72 70s30 70 72 70h64c42 0 72 30 72 70s-30 70-72 70H162" fill="none" stroke="#c7e6dd" stroke-linecap="round" stroke-linejoin="round" stroke-width="54"/>
+  <path d="M316 285h33c6 0 11 5 11 11v33c0 6-5 11-11 11h-33z" fill="#f3b68b"/>
+  <path d="m324 307 9 9 17-18" fill="none" stroke="#063f42" stroke-linecap="round" stroke-linejoin="round" stroke-width="8"/>
+</svg>
