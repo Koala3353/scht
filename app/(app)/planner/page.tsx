@@ -77,6 +77,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       <PlannerWorkspace
         currentTermId={profile?.current_term_id ?? null}
         focusedTaskId={selectedTaskId}
+        userId={user.id}
         projects={projects.map((project) => ({
           id: project.id,
           label: project.name,

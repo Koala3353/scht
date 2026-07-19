@@ -1,10 +1,10 @@
+import { CalendarWorkspace } from "@/components/calendar/calendar-workspace";
 import { PageHeader } from "@/components/workspace/page-header";
 import { ProviderResync, type Provider } from "@/components/integrations/provider-resync";
-import { calendarEntries, type CalendarEntry } from "@/lib/calendar/entries";
-import { calendarTimeZone, localDayLabel, resolveCalendarRange } from "@/lib/calendar/range";
+import { calendarTimeZone, resolveCalendarRange } from "@/lib/calendar/range";
 import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
-import { taskColumns, toTaskView, type TaskRow } from "@/lib/tasks/task-view";
+import { taskColumns, toCachedTask, type TaskRow } from "@/lib/tasks/task-view";
 import { createClient } from "@/lib/supabase/server";
 
 type CalendarSearchParams = Promise<{
@@ -44,7 +44,7 @@ export default async function CalendarPage({
   );
   const timezone = calendarTimeZone(preferences?.timezone);
   const range = resolveCalendarRange(await searchParams, new Date(), timezone);
-  const [tasksResult, eventsResult] = await Promise.all([
+  const [tasksResult, eventsResult, subjectsResult, termsResult, projectsResult, categoriesResult] = await Promise.all([
     supabase
       .from("tasks")
       .select(taskColumns)
@@ -59,32 +59,20 @@ export default async function CalendarPage({
       .gte("starts_at", range.from.toISOString())
       .lt("starts_at", range.to.toISOString())
       .order("starts_at"),
+    supabase.from("subjects").select("id, term_id, code, name").eq("user_id", user.id),
+    supabase.from("academic_terms").select("id, name, academic_year").eq("user_id", user.id).order("starts_on"),
+    supabase.from("projects").select("id, name, status").eq("user_id", user.id).order("created_at"),
+    supabase.from("grade_categories").select("subject_id, name").eq("user_id", user.id),
   ]);
   const tasks = requireQuery(tasksResult, "calendar tasks") ?? [];
   const events = requireQuery(eventsResult, "calendar events") ?? [];
+  const subjects = requireQuery(subjectsResult, "calendar task subjects") ?? [];
+  const terms = requireQuery(termsResult, "calendar task terms") ?? [];
+  const projects = requireQuery(projectsResult, "calendar task projects") ?? [];
+  const categories = requireQuery(categoriesResult, "calendar task grade categories") ?? [];
   const currentTermTasks = (tasks as TaskRow[])
-    .map(toTaskView)
+    .map(toCachedTask)
     .filter((task) => !profile?.current_term_id || task.termId === profile.current_term_id);
-  const entries: CalendarEntry[] = calendarEntries(
-    currentTermTasks,
-    events.flatMap((event) =>
-      event.starts_at
-        ? [{
-            id: event.id,
-            title: event.title,
-            startsAt: event.starts_at,
-            eventUrl: event.event_url,
-            provider: event.provider,
-            isAllDay: event.is_all_day,
-          }]
-        : [],
-    ),
-  );
-  const groups = new Map<string, CalendarEntry[]>();
-  for (const entry of entries) {
-    const day = localDayLabel(entry.at, timezone);
-    groups.set(day, [...(groups.get(day) ?? []), entry]);
-  }
 
   return (
     <main>
@@ -97,42 +85,21 @@ export default async function CalendarPage({
       <p className="mx-auto mt-4 max-w-5xl px-4 text-sm text-slate-600 sm:px-0">
         {new Intl.DateTimeFormat(undefined, { timeZone: timezone }).format(range.from)} – {new Intl.DateTimeFormat(undefined, { timeZone: timezone }).format(new Date(range.to.getTime() - 1))}
       </p>
-      <section className="mx-auto mt-4 max-w-5xl space-y-6 px-4 sm:px-0">
-        {[...groups.entries()].map(([day, dayEntries]) => (
-          <section key={day}>
-            <h2 className="mb-3 text-sm font-bold text-slate-600">{day}</h2>
-            <div className="space-y-3">
-              {dayEntries.map((entry) => (
-                <article className="rounded-2xl border border-slate-200 bg-white p-4" key={entry.id}>
-                  <time className="font-bold text-teal" dateTime={entry.at}>
-                    {entry.isAllDay ? "All day" : new Intl.DateTimeFormat(undefined, { timeZone: timezone, hour: "numeric", minute: "2-digit" }).format(new Date(entry.at))}
-                  </time>
-                  <h3 className="mt-1 font-bold">{entry.title}</h3>
-                  <p className="text-sm text-slate-600">
-                    {entry.detail}
-                    {entry.isTask ? (
-                      <>
-                        {" · "}
-                        <a className="font-semibold text-teal underline" href={entry.href}>
-                          Open task
-                        </a>
-                      </>
-                    ) : entry.href ? (
-                      <>
-                        {" · "}
-                        <a className="font-semibold text-teal underline" href={entry.href} rel="noreferrer" target="_blank">
-                          Open event
-                        </a>
-                      </>
-                    ) : null}
-                  </p>
-                </article>
-              ))}
-            </div>
-          </section>
-        ))}
-        {!entries.length ? <p className="text-slate-600">No scheduled tasks or imported events in this week.</p> : null}
-      </section>
+      <CalendarWorkspace
+        approvedCategoryLabelsBySubject={categories.reduce<Record<string, string[]>>((labels, category) => {
+          labels[category.subject_id] = [...(labels[category.subject_id] ?? []), category.name];
+          return labels;
+        }, {})}
+        currentTermId={profile?.current_term_id ?? null}
+        events={events.flatMap((event) => event.starts_at ? [{ id: event.id, title: event.title, startsAt: event.starts_at, eventUrl: event.event_url, provider: event.provider, isAllDay: event.is_all_day }] : [])}
+        initialTasks={currentTermTasks}
+        projects={projects.map((project) => ({ id: project.id, label: project.name, status: project.status as "active" | "archived" }))}
+        range={{ from: range.from.toISOString(), to: range.to.toISOString() }}
+        subjects={subjects.map((subject) => ({ id: subject.id, termId: subject.term_id, label: `${subject.code} · ${subject.name}` }))}
+        terms={terms.map((term) => ({ id: term.id, label: `${term.name} ${term.academic_year}` }))}
+        timezone={timezone}
+        userId={user.id}
+      />
     </main>
   );
 }

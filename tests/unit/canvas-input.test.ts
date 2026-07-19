@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   canvasApi: vi.fn(),
   decryptCredentials: vi.fn(),
   encryptCredentials: vi.fn(),
+  tasksInsert: vi.fn(),
 }));
 
 vi.mock("../../lib/supabase/server", () => ({ createClient: mocks.createClient }));
@@ -30,7 +31,7 @@ function syncRequest() {
   });
 }
 
-function setupSync(errorAt: "subjects" | "tasks" | "connection" | null) {
+function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existingSourceIds: string[] = []) {
   const connectionQuery = {
     eq: vi.fn(),
     maybeSingle: vi.fn(async () => ({ data: { id: "connection-1", encrypted_credentials: "dGVzdA==" }, error: null })),
@@ -42,6 +43,16 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null) {
   };
   profileQuery.eq.mockReturnValue(profileQuery);
   const mutation = (error: boolean) => ({ select: vi.fn(async () => ({ data: error ? null : [{ id: "saved" }], error: error ? { message: "database down" } : null })) });
+  const subjectMutation = (error: boolean) => ({ select: vi.fn(async () => ({ data: error ? null : [{ id: "saved", canvas_course_id: "42" }], error: error ? { message: "database down" } : null })) });
+  const existingTasksQuery = {
+    eq: vi.fn(),
+    in: vi.fn(async () => ({ data: existingSourceIds.map((source_id) => ({ source_id })), error: null })),
+  };
+  existingTasksQuery.eq.mockReturnValue(existingTasksQuery);
+  const tasksTable = {
+    select: vi.fn(() => existingTasksQuery),
+    insert: mocks.tasksInsert.mockImplementation(() => mutation(errorAt === "tasks")),
+  };
   mocks.createClient.mockResolvedValue({
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },
     from: vi.fn((table: string) => {
@@ -50,8 +61,8 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null) {
         select: vi.fn(() => connectionQuery),
         update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: errorAt === "connection" ? { message: "database down" } : null })) })),
       };
-      if (table === "subjects") return { upsert: vi.fn(() => mutation(errorAt === "subjects")), select: vi.fn(() => subjectsQuery) };
-      if (table === "tasks") return { upsert: vi.fn(() => mutation(errorAt === "tasks")) };
+      if (table === "subjects") return { upsert: vi.fn(() => subjectMutation(errorAt === "subjects")), select: vi.fn(() => subjectsQuery) };
+      if (table === "tasks") return tasksTable;
       throw new Error(`Unexpected table ${table}`);
     }),
   });
@@ -100,5 +111,17 @@ describe("Canvas sync persistence", () => {
 
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ courses: 1, assignments: 1 });
+  });
+
+  it("preserves a manually edited Canvas task when a refresh sees its source identity", async () => {
+    setupSync(null, ["42:1"]);
+
+    const response = await POST(syncRequest());
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ assignments: 0 });
+    // The import never writes an existing source identity, so its description,
+    // deadline, project, completion state, and canonical revision stay intact.
+    expect(mocks.tasksInsert).not.toHaveBeenCalled();
   });
 });

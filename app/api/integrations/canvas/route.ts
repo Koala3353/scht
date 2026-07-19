@@ -94,7 +94,19 @@ export async function POST(request: Request) {
 
     const assignmentCounts = await mapWithConcurrency(savedSubjects ?? [], 3, async (subject) => {
       const assignments = await canvasApi<CanvasAssignment[]>(credentials.baseUrl, credentials.token, `/courses/${subject.canvas_course_id}/assignments?per_page=100`);
-      const tasks = assignments.map((assignment) => ({
+      const sourceIds = assignments.map((assignment) => `${subject.canvas_course_id}:${assignment.id}`);
+      if (!sourceIds.length) return 0;
+      const { data: existingTasks, error: existingTaskError } = await supabase
+        .from("tasks")
+        .select("source_id")
+        .eq("user_id", user.id)
+        .eq("source", "canvas")
+        .in("source_id", sourceIds);
+      if (existingTaskError) throw new Error("Could not read existing Canvas assignments.");
+      const existingSourceIds = new Set((existingTasks ?? []).flatMap((task) => task.source_id ? [task.source_id] : []));
+      // Canvas is an import source, not the owner of a student's task edits.
+      // Existing identities deliberately retain all task context and revision.
+      const tasks = assignments.filter((assignment) => !existingSourceIds.has(`${subject.canvas_course_id}:${assignment.id}`)).map((assignment) => ({
         user_id: user.id,
         term_id: profile.current_term_id,
         subject_id: subject.id,
@@ -109,7 +121,7 @@ export async function POST(request: Request) {
         links: assignment.html_url ? [assignment.html_url] : [],
       }));
       if (!tasks.length) return 0;
-      const { data: savedTasks, error: taskError } = await supabase.from("tasks").upsert(tasks, { onConflict: "user_id,source,source_id" }).select("id");
+      const { data: savedTasks, error: taskError } = await supabase.from("tasks").insert(tasks).select("id");
       if (taskError) throw new Error("Could not save Canvas assignments.");
       return savedTasks?.length ?? 0;
     });

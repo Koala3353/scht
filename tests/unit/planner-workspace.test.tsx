@@ -2,6 +2,30 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const cachedTasks = new Map<string, Record<string, unknown>>();
+const queuedMutations = new Map<string, Record<string, unknown>>();
+
+vi.mock("../../lib/sync/db", () => ({
+  taskDb: {
+    tasks: {
+      where: vi.fn(() => ({ equals: vi.fn((userId: string) => ({ toArray: vi.fn(async () => [...cachedTasks.values()].filter((task) => task.userId === userId)) })) })),
+      get: vi.fn(async (id: string) => cachedTasks.get(id)),
+      put: vi.fn(async (task: Record<string, unknown>) => { cachedTasks.set(task.id as string, task); }),
+      bulkPut: vi.fn(async (items: Record<string, unknown>[]) => { items.forEach((task) => cachedTasks.set(task.id as string, task)); }),
+      update: vi.fn(async (id: string, changes: Record<string, unknown>) => { cachedTasks.set(id, { ...cachedTasks.get(id), ...changes }); }),
+      delete: vi.fn(async (id: string) => { cachedTasks.delete(id); }),
+    },
+    outbox: {
+      where: vi.fn(() => ({ equals: vi.fn((userId: string) => ({ toArray: vi.fn(async () => [...queuedMutations.values()].filter((mutation) => mutation.userId === userId)) })) })),
+      get: vi.fn(async (id: string) => queuedMutations.get(id)),
+      put: vi.fn(async (mutation: Record<string, unknown>) => { queuedMutations.set(mutation.id as string, mutation); }),
+      update: vi.fn(async (id: string, changes: Record<string, unknown>) => { queuedMutations.set(id, { ...queuedMutations.get(id), ...changes }); }),
+      delete: vi.fn(async (id: string) => { queuedMutations.delete(id); }),
+    },
+    transaction: vi.fn(async (_mode: string, _table: unknown, callback: () => Promise<unknown>) => callback()),
+  },
+}));
+
 vi.mock("../../components/work/work-manager", () => ({
   WorkManager: ({ tasks, onTaskProjectChange }: { tasks: Array<{ id: string }>; onTaskProjectChange?: (task: { id: string; projectId: string | null; updatedAt: string }) => void }) => <button onClick={() => onTaskProjectChange?.({ id: tasks[0]?.id ?? "", projectId, updatedAt: "2026-07-19T11:00:00.000Z" })} type="button">Assign task to Capstone</button>,
 }));
@@ -33,11 +57,11 @@ const task: CachedTask = {
   sourceId: null,
 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); cachedTasks.clear(); queuedMutations.clear(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("PlannerWorkspace saves", () => {
   it("opens a valid linked task directly in the shared editor", () => {
-    render(<PlannerWorkspace currentTermId={termId} focusedTaskId={task.id} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
+    render(<PlannerWorkspace currentTermId={termId} focusedTaskId={task.id} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
 
     expect(screen.getByLabelText("Description")).not.toBeNull();
     expect(screen.getByDisplayValue("Save failure task")).not.toBeNull();
@@ -45,7 +69,7 @@ describe("PlannerWorkspace saves", () => {
 
   it("retains a failed save for explicit retry instead of leaving a silent pending row", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
-    render(<PlannerWorkspace currentTermId={termId} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
+    render(<PlannerWorkspace currentTermId={termId} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: "Edit Save failure task" }));
@@ -58,7 +82,7 @@ describe("PlannerWorkspace saves", () => {
   it("surfaces a rejected sync response with an explicit retry", async () => {
     vi.spyOn(globalThis.crypto, "randomUUID").mockReturnValue("mutation-1");
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [{ id: "mutation-1", reason: "This task changed on another device.", syncState: "conflict", taskId: task.id }] }) })));
-    render(<PlannerWorkspace currentTermId={termId} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
+    render(<PlannerWorkspace currentTermId={termId} projects={[]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
     const user = userEvent.setup();
 
     await user.click(screen.getByRole("button", { name: "Edit Save failure task" }));
@@ -69,9 +93,12 @@ describe("PlannerWorkspace saves", () => {
   });
 
   it("applies a direct assignment revision before the next task edit", async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ accepted: [], rejected: [] }) }));
+    const fetchMock = vi.fn(async (_url: string, options: RequestInit) => {
+      const mutation = (JSON.parse(String(options.body)) as { mutations: Array<{ id: string }> }).mutations[0]!;
+      return { ok: true, json: async () => ({ accepted: [{ id: mutation.id, task: { ...task, projectId, updatedAt: "2026-07-19T11:00:00.000Z" } }], rejected: [] }) };
+    });
     vi.stubGlobal("fetch", fetchMock);
-    render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} />);
+    render(<PlannerWorkspace currentTermId={termId} projects={[{ id: projectId, label: "Capstone", status: "active" }]} subjects={[]} tasks={[task]} terms={[{ id: termId, label: "Fall 2026" }]} userId={userId} />);
     const user = userEvent.setup();
 
     await user.selectOptions(screen.getByLabelText("Project"), projectId);

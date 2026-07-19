@@ -1,5 +1,14 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../components/tasks/use-task-sync-workspace", () => ({
+  useTaskSyncWorkspace: ({ initialTasks }: { initialTasks: CachedTask[] }) => ({
+    tasks: initialTasks,
+    saveTask: () => undefined,
+    retrySynchronization: () => undefined,
+    syncState: "Synced",
+  }),
+}));
 
 import { AcademicSummary } from "../../components/grades/academic-summary";
 import { SubjectTaskQueue } from "../../components/subjects/subject-task-queue";
@@ -43,11 +52,9 @@ describe("academic task context", () => {
     };
 
     expect(selectAgendaTasks([gmailTask], termId)).toEqual([gmailTask]);
-    expect(calendarEntries([gmailTask], [])).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: `task-${gmailTask.id}`, detail: "Gmail task" }),
-      ]),
-    );
+    expect(calendarEntries([gmailTask], [])).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: `task-${gmailTask.id}`, type: "task", task: gmailTask }),
+    ]));
 
     render(
       <TaskList
@@ -56,6 +63,7 @@ describe("academic task context", () => {
         subjects={[{ id: subjectId, label: "MATH 121 · Quantitative reasoning", termId }]}
         tasks={[gmailTask]}
         terms={[{ id: termId, label: "Fall 2026" }]}
+        userId={gmailTask.userId}
       />,
     );
 

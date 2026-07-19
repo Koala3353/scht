@@ -5,16 +5,15 @@ import { ArrowRight, CheckCircle2, Cloud } from "lucide-react";
 
 import { selectAgendaTasks } from "./agenda";
 import { FocusCard, chooseFocusTask } from "./focus-card";
-import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "../tasks/task-types";
 import { TaskEditor, type TaskProject, type TaskSubject, type TaskTerm } from "../tasks/task-editor";
 import { TaskList } from "../tasks/task-list";
 import { taskDb } from "../../lib/sync/db";
-import { discardTaskConflict, discardTaskRecovery, enqueueTaskMutation, flushTaskOutbox, resolveRejectedTaskMutation, resolveTaskConflict, retryRejectedTaskMutation, retryTaskOutbox } from "../../lib/sync/outbox";
+import { discardTaskConflict, discardTaskRecovery, enqueueTaskMutation, resolveRejectedTaskMutation, resolveTaskConflict, retryRejectedTaskMutation, retryTaskOutbox } from "../../lib/sync/outbox";
+import { hydrateTaskCache, saveTaskLocally, synchronizeTaskCache } from "../../lib/sync/task-client";
 import type { TaskInput } from "../../lib/validation/task";
 import type {
   CachedTask,
   TaskMutation,
-  TaskSyncResponse,
 } from "../../lib/sync/types";
 
 type SyncState = "Offline" | "Syncing" | "Synced" | "Needs review" | "Sync failed";
@@ -27,18 +26,6 @@ interface TodayWorkspaceProps {
   subjects?: TaskSubject[];
   projects?: TaskProject[];
   headerAction?: ReactNode;
-}
-
-async function postTaskMutations(
-  mutations: TaskMutation[],
-): Promise<TaskSyncResponse> {
-  const response = await fetch("/api/sync/tasks", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ mutations }),
-  });
-  if (!response.ok) throw new Error("Task sync failed.");
-  return response.json() as Promise<TaskSyncResponse>;
 }
 
 function newTaskId() {
@@ -119,35 +106,7 @@ export function TodayWorkspace({
     }
     setSyncState("Syncing");
     try {
-      const response = await flushTaskOutbox(userId, postTaskMutations);
-      await taskDb.transaction("rw", taskDb.tasks, async () => {
-        const pendingMutations = (await taskDb.outbox.where("userId").equals(userId).toArray())
-          .filter((mutation) => mutation.syncState === "pending");
-        await Promise.all(
-          response.accepted.map(async ({ task }) => {
-            const localTask = await taskDb.tasks.get(task.id);
-            if (shouldApplyAcceptedTask(localTask, task, pendingMutations)) {
-              await taskDb.tasks.put({ ...task, userId, syncState: "synced" });
-            }
-          }),
-        );
-        await Promise.all(
-          response.rejected.map(async ({ id, taskId, task: canonicalTask, reason, syncState: rejectedState }) => {
-            // Sync responses identify a mutation; the task cache is keyed by task id.
-            const mutation = await taskDb.outbox.get(id);
-            const affectedTaskId = taskId ?? mutation?.payload.id;
-            if (!affectedTaskId) return;
-            const localTask = await taskDb.tasks.get(affectedTaskId);
-            if (localTask?.userId === userId) {
-              await taskDb.tasks.update(affectedTaskId, {
-                syncState: rejectedState,
-                syncError: reason,
-                ...(canonicalTask ? { canonicalTask } : {}),
-              });
-            }
-          }),
-        );
-      });
+      const response = await synchronizeTaskCache(userId);
       const refreshedTasks = await refreshTasks();
       scheduleRetry(response.nextRetryAt);
       setSyncState(
@@ -305,13 +264,11 @@ export function TodayWorkspace({
   useEffect(() => {
     let active = true;
     async function hydrate() {
-      const localTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
-      const mergedTasks = mergeTaskSnapshot(localTasks, initialTasks, userId, selectedTermId);
-      await taskDb.transaction("rw", taskDb.tasks, async () => {
-        const localIds = new Set(localTasks.map((task) => task.id));
-        const mergedIds = new Set(mergedTasks.map((task) => task.id));
-        await Promise.all([...localIds].filter((id) => !mergedIds.has(id)).map((id) => taskDb.tasks.delete(id)));
-        await taskDb.tasks.bulkPut(mergedTasks);
+      await hydrateTaskCache({
+        userId,
+        snapshot: initialTasks,
+        currentTermId: selectedTermId,
+        pruneMissingSnapshot: true,
       });
       if (active) await refreshTasks();
       if (active) await synchronize();
@@ -332,14 +289,7 @@ export function TodayWorkspace({
   }, [initialTasks, selectedTermId, userId]);
 
   async function saveTask(task: CachedTask, baseUpdatedAt: string | null) {
-    await taskDb.tasks.put({ ...task, syncState: "pending", syncError: undefined });
-    await enqueueTaskMutation({
-      id: newTaskId(),
-      userId,
-      operation: "upsert",
-      payload: task,
-      baseUpdatedAt,
-    });
+    await saveTaskLocally(userId, task, baseUpdatedAt);
     await refreshTasks();
     await synchronize();
   }

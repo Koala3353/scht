@@ -1,4 +1,4 @@
-import type { TaskView } from "@/lib/sync/types";
+import type { CachedTask } from "@/lib/sync/types";
 
 export type CalendarEventView = {
   id: string;
@@ -9,28 +9,35 @@ export type CalendarEventView = {
   isAllDay: boolean;
 };
 
-export type CalendarEntry = {
+export type CalendarTaskEntry = {
+  id: string;
+  at: string;
+  task: CachedTask;
+  type: "task";
+};
+
+export type CalendarEventEntry = {
   id: string;
   title: string;
   at: string;
   detail: string;
   href: string;
-  isTask: boolean;
+  type: "event";
   isAllDay: boolean;
 };
 
-export function calendarEntries(tasks: TaskView[], events: CalendarEventView[]): CalendarEntry[] {
+export type CalendarEntry = CalendarTaskEntry | CalendarEventEntry;
+
+/** Calendar task entries retain the complete executable task contract. */
+export function calendarEntries(tasks: CachedTask[], events: CalendarEventView[]): CalendarEntry[] {
   return [
     ...tasks.flatMap((task) =>
       task.dueAt
         ? [{
             id: `task-${task.id}`,
-            title: task.title,
             at: task.dueAt,
-            detail: task.source === "gmail" ? "Gmail task" : task.source === "canvas" ? "Canvas task" : "Task",
-            href: `/planner?task=${task.id}`,
-            isTask: true,
-            isAllDay: false,
+            task,
+            type: "task" as const,
           }]
         : [],
     ),
@@ -40,7 +47,7 @@ export function calendarEntries(tasks: TaskView[], events: CalendarEventView[]):
       at: event.startsAt,
       detail: event.provider === "google_calendar" ? "Google Calendar" : event.provider,
       href: event.eventUrl ?? "",
-      isTask: false,
+      type: "event" as const,
       isAllDay: event.isAllDay,
     })),
   ].sort((left, right) => new Date(left.at).getTime() - new Date(right.at).getTime());

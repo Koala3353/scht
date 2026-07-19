@@ -16,6 +16,7 @@ export function mergeTaskSnapshot(
   serverTasks: CachedTask[],
   userId: string,
   currentTermId: string | null,
+  pruneMissingSnapshot = true,
 ): CachedTask[] {
   const serverById = new Map(
     serverTasks.filter((task) => task.userId === userId).map((task) => [task.id, task]),
@@ -32,7 +33,7 @@ export function mergeTaskSnapshot(
     }
 
     const isMissingSyncedCurrentTerm =
-      localTask.syncState === 'synced' && localTask.termId === currentTermId;
+      pruneMissingSnapshot && localTask.syncState === 'synced' && localTask.termId === currentTermId;
     if (!isMissingSyncedCurrentTerm) merged.push(localTask);
   }
 
