@@ -8,6 +8,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['tests/unit/**/*.test.{ts,tsx}', 'tests/integration/**/*.test.{ts,tsx}'],
-    exclude: ['tests/e2e/**', 'scht-foundation/**'],
+    exclude: ['tests/e2e/**', 'scht-foundation/**', '.worktrees/**'],
   },
 });
