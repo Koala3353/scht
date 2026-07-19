@@ -9,12 +9,8 @@ vi.mock('../../lib/sync/db', () => ({
         outbox.set(mutation.id as string, mutation);
       }),
       where: vi.fn(() => ({
-        belowOrEqual: vi.fn(() => ({
-          sortBy: vi.fn(async () =>
-            [...outbox.values()]
-              .filter((mutation) => (mutation.nextAttemptAt as number) <= Date.now())
-              .sort((first, second) => (first.createdAt as number) - (second.createdAt as number)),
-          ),
+        equals: vi.fn(() => ({
+          toArray: vi.fn(async () => [...outbox.values()]),
         })),
       })),
       update: vi.fn(async (id: string, changes: Record<string, unknown>) => {
@@ -35,7 +31,10 @@ const validTask = {
   title: 'Write reflection',
   kind: 'school' as const,
   priority: 'normal' as const,
+  description: '',
+  links: [],
 };
+const userId = '0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f';
 
 describe('task mutation outbox', () => {
   beforeEach(() => {
@@ -44,20 +43,20 @@ describe('task mutation outbox', () => {
   });
 
   it('keeps a mutation until the server acknowledges it', async () => {
-    await enqueueTaskMutation({ id: 'm1', operation: 'upsert', payload: validTask });
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: validTask, baseUpdatedAt: null });
 
-    await flushTaskOutbox(async () => ({ accepted: [], rejected: [] }));
+    await flushTaskOutbox(userId, async () => ({ accepted: [], rejected: [] }));
     expect(outbox.size).toBe(1);
 
-    await flushTaskOutbox(async () => ({ accepted: ['m1'], rejected: [] }));
+    await flushTaskOutbox(userId, async () => ({ accepted: [{ id: 'm1', task: { id: 'task-1', title: 'Write reflection', kind: 'school', priority: 'normal', description: '', links: [], updatedAt: '2026-07-19T10:00:00.000Z' } }], rejected: [] }));
     expect(outbox.size).toBe(0);
   });
 
   it('defers a network failure with exponential backoff', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
-    await enqueueTaskMutation({ id: 'm1', operation: 'upsert', payload: validTask });
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: validTask, baseUpdatedAt: null });
 
-    await flushTaskOutbox(async () => {
+    await flushTaskOutbox(userId, async () => {
       throw new Error('offline');
     });
 
@@ -65,14 +64,17 @@ describe('task mutation outbox', () => {
     now.mockRestore();
   });
 
-  it('removes terminally rejected mutations so they do not retry forever', async () => {
-    await enqueueTaskMutation({ id: 'm1', operation: 'upsert', payload: validTask });
+  it('retains a terminal rejection with its user-safe reason', async () => {
+    await enqueueTaskMutation({ id: 'm1', userId, operation: 'upsert', payload: validTask, baseUpdatedAt: null });
 
-    await flushTaskOutbox(async () => ({
+    await flushTaskOutbox(userId, async () => ({
       accepted: [],
-      rejected: [{ id: 'm1', reason: 'Task belongs to another user.' }],
+      rejected: [{ id: 'm1', reason: 'Task belongs to another user.', syncState: 'rejected' }],
     }));
 
-    expect(outbox.size).toBe(0);
+    expect(outbox.get('m1')).toMatchObject({
+      syncState: 'rejected',
+      syncError: 'Task belongs to another user.',
+    });
   });
 });

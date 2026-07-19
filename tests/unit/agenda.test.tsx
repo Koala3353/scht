@@ -5,14 +5,21 @@ import { Agenda, selectAgendaTasks } from "../../components/today/agenda";
 
 const currentHighWeightTask = {
   id: "current-task",
+  userId: "0f0d1d8d-4d3b-4d97-b9e3-5f2d6e2a9b4f",
   title: "Quant 121 — problem set",
   kind: "school" as const,
   termId: "current-term",
   dueAt: "2026-07-18T12:00:00.000Z",
   priority: "high" as const,
   weightPercent: 25,
+  subjectId: null,
+  projectId: null,
+  description: "",
+  links: [],
+  effortMinutes: null,
   completedAt: null,
   updatedAt: "2026-07-18T08:00:00.000Z",
+  syncState: "synced" as const,
 };
 
 describe("Agenda", () => {

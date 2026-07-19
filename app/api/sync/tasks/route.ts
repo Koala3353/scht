@@ -1,20 +1,48 @@
 import { NextResponse } from 'next/server';
 
 import { createClient } from '../../../../lib/supabase/server';
-import { TaskInputSchema } from '../../../../lib/validation/task';
-import type { RejectedTaskMutation, TaskSyncResponse } from '../../../../lib/sync/types';
+import { TaskInputSchema, type TaskInput } from '../../../../lib/validation/task';
+import type { RejectedTaskMutation, TaskSyncResponse, TaskView } from '../../../../lib/sync/types';
 
 type IncomingMutation = {
   id: unknown;
+  userId: unknown;
   operation: unknown;
   payload: unknown;
+  baseUpdatedAt: unknown;
 };
 
-function rejection(id: unknown, reason: string): RejectedTaskMutation {
-  return { id: typeof id === 'string' ? id : 'unknown', reason };
+type TaskRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  kind: 'school' | 'work' | 'personal';
+  due_at: string | null;
+  priority: 'low' | 'normal' | 'high';
+  term_id: string | null;
+  subject_id: string | null;
+  project_id: string | null;
+  weight_percent: number | null;
+  notes: string | null;
+  links: string[] | null;
+  effort_minutes: number | null;
+  completed_at: string | null;
+  updated_at: string;
+};
+
+const taskColumns =
+  'id,user_id,title,kind,due_at,priority,term_id,subject_id,project_id,weight_percent,notes,links,effort_minutes,completed_at,updated_at';
+
+function rejection(
+  id: unknown,
+  reason: string,
+  syncState: RejectedTaskMutation['syncState'] = 'rejected',
+  task?: TaskView,
+): RejectedTaskMutation {
+  return { id: typeof id === 'string' ? id : 'unknown', reason, syncState, ...(task ? { task } : {}) };
 }
 
-function toTaskRow(task: ReturnType<typeof TaskInputSchema.parse>, userId: string) {
+function toTaskRow(task: TaskInput, userId: string) {
   return {
     ...(task.id ? { id: task.id } : {}),
     user_id: userId,
@@ -24,8 +52,31 @@ function toTaskRow(task: ReturnType<typeof TaskInputSchema.parse>, userId: strin
     priority: task.priority,
     term_id: task.termId ?? null,
     subject_id: task.subjectId ?? null,
+    project_id: task.projectId ?? null,
     weight_percent: task.weightPercent ?? null,
+    notes: task.description,
+    links: task.links,
+    effort_minutes: task.effortMinutes ?? null,
     completed_at: task.completedAt ?? null,
+  };
+}
+
+function toTaskView(row: TaskRow): TaskView {
+  return {
+    id: row.id,
+    title: row.title,
+    kind: row.kind,
+    dueAt: row.due_at,
+    priority: row.priority,
+    termId: row.term_id,
+    subjectId: row.subject_id,
+    projectId: row.project_id,
+    weightPercent: row.weight_percent,
+    description: row.notes ?? '',
+    links: row.links ?? [],
+    effortMinutes: row.effort_minutes,
+    completedAt: row.completed_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -60,8 +111,18 @@ export async function POST(request: Request) {
       continue;
     }
 
+    if (mutation.userId !== user.id) {
+      response.rejected.push(rejection(mutation.id, 'This mutation belongs to another account.'));
+      continue;
+    }
+
     if (mutation.operation !== 'upsert') {
       response.rejected.push(rejection(mutation.id, 'Unsupported mutation operation.'));
+      continue;
+    }
+
+    if (mutation.baseUpdatedAt !== null && typeof mutation.baseUpdatedAt !== 'string') {
+      response.rejected.push(rejection(mutation.id, 'A valid base update time is required.'));
       continue;
     }
 
@@ -71,16 +132,55 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const { error } = await supabase
-      .from('tasks')
-      .upsert(toTaskRow(parsedTask.data, user.id), { onConflict: 'id' });
-
-    if (error) {
-      response.rejected.push(rejection(mutation.id, error.message));
+    if (mutation.baseUpdatedAt !== null && !parsedTask.data.id) {
+      response.rejected.push(rejection(mutation.id, 'An existing task id is required.'));
       continue;
     }
 
-    response.accepted.push(mutation.id);
+    const row = toTaskRow(parsedTask.data, user.id);
+    if (mutation.baseUpdatedAt === null) {
+      const { data, error } = await supabase.from('tasks').insert(row).select(taskColumns).single();
+      if (error || !data) {
+        response.rejected.push(rejection(mutation.id, 'Unable to save this task.'));
+        continue;
+      }
+      response.accepted.push({ id: mutation.id, task: toTaskView(data as TaskRow) });
+      continue;
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(row)
+      .eq('id', parsedTask.data.id)
+      .eq('user_id', user.id)
+      .eq('updated_at', mutation.baseUpdatedAt)
+      .select(taskColumns)
+      .maybeSingle();
+
+    if (error) {
+      response.rejected.push(rejection(mutation.id, 'Unable to save this task.'));
+      continue;
+    }
+
+    if (data) {
+      response.accepted.push({ id: mutation.id, task: toTaskView(data as TaskRow) });
+      continue;
+    }
+
+    const { data: canonical } = await supabase
+      .from('tasks')
+      .select(taskColumns)
+      .eq('id', parsedTask.data.id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+    response.rejected.push(
+      rejection(
+        mutation.id,
+        'This task changed on another device.',
+        'conflict',
+        canonical ? toTaskView(canonical as TaskRow) : undefined,
+      ),
+    );
   }
 
   return NextResponse.json(response);

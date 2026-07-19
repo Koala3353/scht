@@ -1,23 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, CheckCircle2, Cloud, Plus } from "lucide-react";
 
 import { Agenda, selectAgendaTasks } from "@/components/today/agenda";
 import { FocusCard, chooseFocusTask } from "@/components/today/focus-card";
+import { mergeTaskSnapshot } from "@/components/tasks/task-types";
 import { taskDb } from "@/lib/sync/db";
-import { enqueueTaskMutation, flushTaskOutbox } from "@/lib/sync/outbox";
+import { enqueueTaskMutation, flushTaskOutbox, retryTaskOutbox } from "@/lib/sync/outbox";
 import type {
   CachedTask,
   TaskMutation,
   TaskSyncResponse,
 } from "@/lib/sync/types";
 
-type SyncState = "Offline" | "Syncing" | "Synced" | "Needs review";
+type SyncState = "Offline" | "Syncing" | "Synced" | "Needs review" | "Sync failed";
 
 interface TodayWorkspaceProps {
   initialTasks: CachedTask[];
   selectedTermId: string | null;
+  userId: string;
 }
 
 async function postTaskMutations(
@@ -45,20 +47,26 @@ function syncTone(state: SyncState) {
 export function TodayWorkspace({
   initialTasks,
   selectedTermId,
+  userId,
 }: TodayWorkspaceProps) {
   const [tasks, setTasks] = useState<CachedTask[]>(initialTasks);
   const [syncState, setSyncState] = useState<SyncState>("Synced");
   const [title, setTitle] = useState("");
+  const retryTimer = useRef<number | undefined>(undefined);
   const agendaTasks = useMemo(
     () => (selectedTermId ? selectAgendaTasks(tasks, selectedTermId) : []),
     [selectedTermId, tasks],
   );
 
   async function refreshTasks() {
-    if (!selectedTermId) return;
-    setTasks(
-      await taskDb.tasks.where("termId").equals(selectedTermId).toArray(),
-    );
+    const cachedTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
+    setTasks(selectedTermId ? cachedTasks.filter((task) => task.termId === selectedTermId) : cachedTasks);
+  }
+
+  function scheduleRetry(nextRetryAt?: number) {
+    if (retryTimer.current !== undefined) window.clearTimeout(retryTimer.current);
+    if (!nextRetryAt || !navigator.onLine) return;
+    retryTimer.current = window.setTimeout(() => void synchronize(), Math.max(0, nextRetryAt - Date.now()));
   }
 
   async function synchronize() {
@@ -68,17 +76,46 @@ export function TodayWorkspace({
     }
     setSyncState("Syncing");
     try {
-      const response = await flushTaskOutbox(postTaskMutations);
+      const response = await flushTaskOutbox(userId, postTaskMutations);
+      await taskDb.transaction("rw", taskDb.tasks, async () => {
+        await Promise.all(
+          response.accepted.map(({ task }) =>
+            taskDb.tasks.put({ ...task, userId, syncState: "synced" }),
+          ),
+        );
+        await Promise.all(
+          response.rejected.map(async ({ id, reason, syncState: rejectedState }) => {
+            const localTask = await taskDb.tasks.get(id);
+            if (localTask?.userId === userId) {
+              await taskDb.tasks.update(id, { syncState: rejectedState, syncError: reason });
+            }
+          }),
+        );
+      });
+      await refreshTasks();
+      scheduleRetry(response.nextRetryAt);
       setSyncState(response.rejected.length > 0 ? "Needs review" : "Synced");
     } catch {
-      setSyncState("Offline");
+      setSyncState("Sync failed");
     }
+  }
+
+  async function retrySynchronization() {
+    await retryTaskOutbox(userId);
+    await synchronize();
   }
 
   useEffect(() => {
     let active = true;
     async function hydrate() {
-      if (initialTasks.length > 0) await taskDb.tasks.bulkPut(initialTasks);
+      const localTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
+      const mergedTasks = mergeTaskSnapshot(localTasks, initialTasks, userId, selectedTermId);
+      await taskDb.transaction("rw", taskDb.tasks, async () => {
+        const localIds = new Set(localTasks.map((task) => task.id));
+        const mergedIds = new Set(mergedTasks.map((task) => task.id));
+        await Promise.all([...localIds].filter((id) => !mergedIds.has(id)).map((id) => taskDb.tasks.delete(id)));
+        await taskDb.tasks.bulkPut(mergedTasks);
+      });
       if (active) await refreshTasks();
       if (active) await synchronize();
     }
@@ -89,19 +126,22 @@ export function TodayWorkspace({
     window.addEventListener("offline", handleOffline);
     return () => {
       active = false;
+      if (retryTimer.current !== undefined) window.clearTimeout(retryTimer.current);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
     // The server snapshot is a hydration boundary; local changes remain authoritative after it loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTermId]);
+  }, [initialTasks, selectedTermId, userId]);
 
-  async function saveTask(task: CachedTask) {
-    await taskDb.tasks.put(task);
+  async function saveTask(task: CachedTask, baseUpdatedAt: string | null) {
+    await taskDb.tasks.put({ ...task, syncState: "pending", syncError: undefined });
     await enqueueTaskMutation({
       id: newTaskId(),
+      userId,
       operation: "upsert",
       payload: task,
+      baseUpdatedAt,
     });
     await refreshTasks();
     await synchronize();
@@ -109,7 +149,7 @@ export function TodayWorkspace({
 
   async function completeTask(task: CachedTask) {
     const updatedAt = new Date().toISOString();
-    await saveTask({ ...task, completedAt: updatedAt, updatedAt });
+    await saveTask({ ...task, completedAt: updatedAt, updatedAt }, task.updatedAt);
   }
 
   async function addTask(event: FormEvent<HTMLFormElement>) {
@@ -119,16 +159,22 @@ export function TodayWorkspace({
     const now = new Date().toISOString();
     await saveTask({
       id: newTaskId(),
+      userId,
       title: trimmedTitle,
       kind: "school",
       priority: "normal",
       termId: selectedTermId,
       dueAt: null,
       subjectId: null,
+      projectId: null,
       weightPercent: null,
+      description: "",
+      links: [],
+      effortMinutes: null,
       completedAt: null,
       updatedAt: now,
-    });
+      syncState: "pending",
+    }, null);
     setTitle("");
   }
 
@@ -180,6 +226,15 @@ export function TodayWorkspace({
           <Cloud className="size-4" aria-hidden="true" />
           {syncState}
         </p>
+        {(syncState === "Needs review" || syncState === "Sync failed") && (
+          <button
+            className="inline-flex min-h-11 w-fit items-center justify-center rounded-xl border border-action px-4 py-2 text-sm font-bold text-action transition hover:bg-[#f7ebe3]"
+            onClick={() => void retrySynchronization()}
+            type="button"
+          >
+            Retry sync
+          </button>
+        )}
       </header>
 
       <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.8fr)]">

@@ -8,7 +8,11 @@ export const TaskInputSchema = z.object({
   priority: z.enum(['low', 'normal', 'high']).default('normal'),
   termId: z.string().uuid().nullable().optional(),
   subjectId: z.string().uuid().nullable().optional(),
+  projectId: z.string().uuid().nullable().optional(),
   weightPercent: z.number().min(0).max(100).nullable().optional(),
+  description: z.string().trim().max(5_000).default(''),
+  links: z.array(z.url()).max(12).default([]),
+  effortMinutes: z.number().int().positive().max(1_440).nullable().optional(),
   completedAt: z.string().datetime().nullable().optional(),
 });
 
