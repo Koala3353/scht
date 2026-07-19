@@ -25,9 +25,22 @@ export async function GET(request: NextRequest) {
 
   if (profile.role !== 'owner_admin') {
     const { data: accepted, error: inviteError } = await supabase.rpc('accept_invite_for_current_user');
-    if (inviteError || !accepted) {
-      await supabase.auth.signOut();
-      return redirectTo(request, '/?error=invite-required');
+    if (inviteError) return redirectTo(request, '/?error=invite-required');
+
+    if (!accepted) {
+      const email = user.email?.trim().toLowerCase();
+      const { data: invite, error: inviteLookupError } = email
+        ? await supabase
+            .from('invites')
+            .select('accepted_by, accepted_at')
+            .eq('normalized_email', email)
+            .maybeSingle()
+        : { data: null, error: new Error('Missing account email.') };
+
+      if (inviteLookupError || invite?.accepted_by !== user.id || !invite.accepted_at) {
+        await supabase.auth.signOut();
+        return redirectTo(request, '/?error=invite-required');
+      }
     }
   }
 

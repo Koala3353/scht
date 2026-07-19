@@ -34,7 +34,7 @@ const workflow = [
   },
 ];
 
-export function LandingPage() {
+export function LandingPage({ authenticationError }: { authenticationError?: string }) {
   return (
     <main className="min-h-screen overflow-hidden bg-[#f6f8f8] text-ink">
       <section className="landing-hero relative isolate overflow-hidden bg-[#063f42] text-white">
@@ -66,6 +66,11 @@ export function LandingPage() {
             Get started
           </Link>
         </nav>
+        {authenticationError && (
+          <p className="relative mx-auto max-w-7xl px-5 pt-2 text-sm font-semibold text-[#ffd1ad] sm:px-8 lg:px-10" role="alert">
+            Sign-in could not be completed. Request a new secure sign-in link, then try again.
+          </p>
+        )}
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 pb-20 pt-12 sm:px-8 md:pb-28 md:pt-18 lg:grid-cols-[.94fr_1.06fr] lg:gap-16 lg:px-10">
           <div className="max-w-2xl">
             <p className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-1.5 text-xs font-bold text-teal-50">
