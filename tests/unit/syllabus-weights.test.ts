@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import { createElement } from 'react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { candidateWeightsAreComplete, extractCandidateWeights } from '../../lib/syllabus/weights';
+import { SubjectTaskQueue } from '../../components/subjects/subject-task-queue';
+import type { CachedTask } from '../../lib/sync/types';
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('syllabus assessment weights', () => {
   it('extracts category weights and requires an exact 100% total for approval', () => {
@@ -7,9 +17,24 @@ describe('syllabus assessment weights', () => {
     expect(weights).toEqual([{ name: 'Quizzes', weightPercent: 20 }, { name: 'Exams', weightPercent: 50 }, { name: 'Final project', weightPercent: 30 }]);
     expect(candidateWeightsAreComplete(weights)).toBe(true);
   });
-  it('keeps the syllabus state and next open assignment visible together on Subjects', async () => {
-    const [source, taskQueue] = await import('node:fs/promises').then((fs) => Promise.all([fs.readFile('app/(app)/subjects/page.tsx', 'utf8'), fs.readFile('components/subjects/subject-task-queue.tsx', 'utf8')]));
-    expect(source).toContain('Approved weights');
-    expect(taskQueue).toContain('Next open assignment');
+  it('keeps the next subject assignment executable with canonical task controls', async () => {
+    const task: CachedTask = { id: 'task-1', userId: 'user-1', title: 'Research reflection', kind: 'school', dueAt: '2026-07-24T09:30:00.000Z', priority: 'normal', termId: 'term-1', subjectId: 'subject-1', projectId: null, weightPercent: 20, description: 'Use class readings.', links: [], effortMinutes: null, completedAt: null, updatedAt: '2026-07-19T00:00:00.000Z', syncState: 'synced', source: 'canvas', sourceId: 'canvas-1' };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { mutations: Array<{ id: string; payload: CachedTask }> };
+      return { ok: true, json: async () => ({ accepted: [{ id: body.mutations[0]?.id, task: body.mutations[0]?.payload }], rejected: [] }) } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(createElement(SubjectTaskQueue, { approvedCategoryLabels: ['Reflections'], currentTermId: 'term-1', initialTasks: [task], projects: [], subjects: [{ id: 'subject-1', termId: 'term-1', label: 'HIST 101 · History' }], terms: [{ id: 'term-1', label: 'Fall 2026' }] }));
+    const user = userEvent.setup();
+
+    expect(screen.getByRole('heading', { name: 'Next open assignment' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Edit Research reflection' }));
+    expect(screen.getByLabelText('Due date and time')).not.toBeNull();
+    await user.clear(screen.getByLabelText('Due date and time'));
+    await user.type(screen.getByLabelText('Due date and time'), '2026-07-25T13:30');
+    await user.click(screen.getByRole('button', { name: 'Save task' }));
+    await user.click(screen.getByRole('button', { name: 'Complete Research reflection' }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -4,7 +4,7 @@ import { SubjectTaskQueue } from "@/components/subjects/subject-task-queue";
 import { SubjectUnitsEditor } from "@/components/subjects/subject-units-editor";
 import { requireUser } from "@/lib/auth/guards";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
-import { taskColumns, toTaskView, type TaskRow } from "@/lib/tasks/task-view";
+import { taskColumns, toCachedTask, type TaskRow } from "@/lib/tasks/task-view";
 import { createClient } from "@/lib/supabase/server";
 import { calculateGrade, type AssessmentResult, type GradeCategory } from "@/lib/grades/calculator";
 
@@ -23,7 +23,7 @@ export default async function SubjectsPage() {
     ? requireQuery(
         await supabase
         .from("subjects")
-        .select("id, code, name, professor_notes, syllabus_status, units")
+        .select("id, term_id, code, name, professor_notes, syllabus_status, units")
         .eq("term_id", profile.current_term_id)
         .is("archived_at", null)
         .order("code"),
@@ -61,15 +61,19 @@ export default async function SubjectsPage() {
         "subject tasks",
       )
     : []) ?? [];
-  const [categoriesResult, resultsResult] = await Promise.all([
+  const [categoriesResult, resultsResult, termsResult, projectsResult] = await Promise.all([
     subjects.length ? supabase.from("grade_categories").select("id, subject_id, name, weight_percent").eq("user_id", user.id).in("subject_id", subjects.map((subject) => subject.id)) : Promise.resolve({ data: [], error: null }),
     supabase.from("assessment_results").select("category_id, score, possible_score").eq("user_id", user.id),
+    supabase.from("academic_terms").select("id, name, academic_year").eq("user_id", user.id).order("starts_on"),
+    supabase.from("projects").select("id, name, status").eq("user_id", user.id).order("created_at"),
   ]);
   const categories = requireQuery(categoriesResult, "subject grade categories") ?? [];
   const results = requireQuery(resultsResult, "subject assessment results") ?? [];
-  const openTasksBySubject = new Map<string, ReturnType<typeof toTaskView>[]>();
+  const terms = requireQuery(termsResult, "subject task terms") ?? [];
+  const projects = requireQuery(projectsResult, "subject task projects") ?? [];
+  const openTasksBySubject = new Map<string, ReturnType<typeof toCachedTask>[]>();
   for (const row of taskRows as TaskRow[]) {
-    const task = toTaskView(row);
+    const task = toCachedTask(row);
     if (!task.subjectId) continue;
     const queue = openTasksBySubject.get(task.subjectId) ?? [];
     queue.push(task);
@@ -130,7 +134,7 @@ export default async function SubjectsPage() {
               subjectId={subject.id}
               syllabus={newestSyllabus.get(subject.id) ?? null}
             />
-            <SubjectTaskQueue approvedCategoryLabels={categories.filter((category) => category.subject_id === subject.id).map((category) => category.name)} subjectLabel={`${subject.code} · ${subject.name}`} tasks={openTasksBySubject.get(subject.id) ?? []} />
+            <SubjectTaskQueue approvedCategoryLabels={categories.filter((category) => category.subject_id === subject.id).map((category) => category.name)} currentTermId={profile?.current_term_id ?? null} initialTasks={openTasksBySubject.get(subject.id) ?? []} projects={projects.map((project) => ({ id: project.id, label: project.name, status: project.status as "active" | "archived" }))} subjects={subjects.map((item) => ({ id: item.id, termId: item.term_id, label: `${item.code} · ${item.name}` }))} terms={terms.map((term) => ({ id: term.id, label: `${term.name} ${term.academic_year}` }))} />
           </article>
         ))}
       </section>

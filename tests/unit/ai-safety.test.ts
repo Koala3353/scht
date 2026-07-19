@@ -14,6 +14,7 @@ describe('AI proposal safety', () => {
   it('keeps the copyable assignment start local and free of encrypted-vault data', () => {
     const prompt = buildAssignmentStarterPrompt({ id: 'task-1', title: 'Lab report', kind: 'school', dueAt: null, priority: 'normal', termId: null, subjectId: null, projectId: null, weightPercent: null, description: '', links: [], effortMinutes: null, completedAt: null, updatedAt: '2026-07-19T00:00:00.000Z', source: 'canvas', sourceId: 'canvas-1' }, 'BIO 101', ['Labs']);
     expect(prompt).toContain('without writing it for me');
+    expect(prompt).toContain('Assessment context: Labs');
     expect(prompt).not.toMatch(/vault|ciphertext|secret|api[_ -]?key/i);
   });
 });

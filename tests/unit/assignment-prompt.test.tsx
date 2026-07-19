@@ -2,7 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AssignmentPrompt, buildAssignmentStarterPrompt, copyAssignmentStarterPrompt } from "../../components/ai/assignment-prompt";
+import { AssignmentPrompt, buildAssignmentStarterPrompt } from "../../components/ai/assignment-prompt";
 import type { TaskView } from "../../lib/sync/types";
 
 const task: TaskView = {
@@ -29,22 +29,24 @@ afterEach(cleanup);
 describe("assignment starter prompt", () => {
   it("copies source-backed task context and asks for an outline, not a submission", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    render(<AssignmentPrompt approvedCategoryLabels={["Essays", "Participation"]} subjectLabel="HIST 101 · History" task={task} />);
+    render(<AssignmentPrompt approvedCategoryLabels={["Essays", "Participation"]} clipboard={{ writeText }} subjectLabel="HIST 101 · History" task={task} />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Copy AI starter prompt" }));
 
-    await copyAssignmentStarterPrompt(buildAssignmentStarterPrompt(task, "HIST 101 · History", ["Essays", "Participation"]), { writeText });
+    const expectedPrompt = buildAssignmentStarterPrompt(task, "HIST 101 · History", ["Essays", "Participation"]);
     expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(expectedPrompt);
     const copied = writeText.mock.calls[0]?.[0] ?? "";
     expect(copied).toContain("Assignment: Analysis essay");
     expect(copied).toContain("Course: HIST 101 · History");
+    expect(copied).toContain("Assessment context: Essays, Participation");
     expect(copied).toContain("Due: ");
     expect(copied).toContain("Brief: Compare two primary sources.");
     expect(copied).toContain("Reference: https://canvas.example.edu/assignments/42");
     expect(copied).toContain("give me a small outline");
     expect(copied).toContain("without writing it for me");
     expect(copied).not.toMatch(/vault|ciphertext|api[_ -]?key|secret/i);
-    expect(screen.getByRole("status").textContent).toContain("copied");
+    expect(screen.getByRole("status").textContent).toBe("AI starter prompt copied. Paste it into the AI tool you choose.");
   });
 
   it("keeps an undated, brief-less task compact and useful", () => {
@@ -54,6 +56,7 @@ describe("assignment starter prompt", () => {
     expect(prompt).not.toContain("Due:");
     expect(prompt).not.toContain("Brief:");
     expect(prompt).not.toContain("Reference:");
+    expect(prompt).not.toContain("Assessment context:");
     expect(prompt).toContain("25-minute first step");
   });
 });

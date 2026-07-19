@@ -13,7 +13,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
   const supabase = await createClient();
   const rawTaskId = (await searchParams).task;
   const selectedTaskId = focusedTaskId(rawTaskId);
-  const [profileResult, tasksResult, subjectsResult, termsResult, projectsResult, focusedTaskResult] = await Promise.all([
+  const [profileResult, tasksResult, subjectsResult, termsResult, projectsResult, categoriesResult, focusedTaskResult] = await Promise.all([
     supabase.from("profiles").select("current_term_id").eq("id", user.id).maybeSingle(),
     supabase
       .from("tasks")
@@ -32,6 +32,10 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       .select("id, name, status")
       .eq("user_id", user.id)
       .order("created_at"),
+    supabase
+      .from("grade_categories")
+      .select("subject_id, name")
+      .eq("user_id", user.id),
     selectedTaskId
       ? supabase
           .from("tasks")
@@ -46,6 +50,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
   const subjects = requireQuery(subjectsResult, "task subjects") ?? [];
   const terms = requireQuery(termsResult, "task terms") ?? [];
   const projects = requireQuery(projectsResult, "task projects") ?? [];
+  const categories = requireQuery(categoriesResult, "task grade categories") ?? [];
   const focusedTask = requireQuery(focusedTaskResult, "focused task");
   const plannerTasks = mergeFocusedTask(tasks as TaskRow[], focusedTask as TaskRow | null);
 
@@ -62,6 +67,11 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
           label: project.name,
           status: project.status as "active" | "archived",
         }))}
+        approvedCategoryLabelsBySubject={categories.reduce<Record<string, string[]>>((labels, category) => {
+          const existing = labels[category.subject_id] ?? [];
+          labels[category.subject_id] = [...existing, category.name];
+          return labels;
+        }, {})}
         subjects={subjects.map((subject) => ({
           id: subject.id,
           termId: subject.term_id,

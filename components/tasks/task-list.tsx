@@ -15,6 +15,7 @@ type TaskListProps = {
   projects: TaskProject[];
   onSave: (task: CachedTask, baseUpdatedAt: string | null) => void | Promise<void>;
   initialEditingId?: string | null;
+  approvedCategoryLabelsBySubject?: Record<string, string[]>;
 };
 
 function relativeDue(dueAt: string | null | undefined) {
@@ -32,7 +33,7 @@ function relativeDue(dueAt: string | null | undefined) {
   return dateTime;
 }
 
-export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave, initialEditingId = null }: TaskListProps) {
+export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave, initialEditingId = null, approvedCategoryLabelsBySubject = {} }: TaskListProps) {
   const [editing, setEditing] = useState<string | null>(initialEditingId);
   const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
   const projectLabels = new Map(projects.map((project) => [project.id, project.label]));
@@ -61,7 +62,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
                       <time className={`mt-1 block text-sm font-semibold ${dueLabel.startsWith("Overdue") ? "text-action" : "text-slate-600"}`} dateTime={task.dueAt ?? undefined}>{dueLabel}</time>
                     </div>
                     <div className="flex flex-wrap items-start gap-2">
-                      {!task.completedAt ? <AssignmentPrompt approvedCategoryLabels={[]} subjectLabel={task.subjectId ? (subjectLabels.get(task.subjectId) ?? "Not assigned") : "Not assigned"} task={task} /> : null}
+                      {!task.completedAt ? <AssignmentPrompt approvedCategoryLabels={task.subjectId ? (approvedCategoryLabelsBySubject[task.subjectId] ?? []) : []} subjectLabel={task.subjectId ? (subjectLabels.get(task.subjectId) ?? "Not assigned") : "Not assigned"} task={task} /> : null}
                       <button aria-label={`Edit ${task.title}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-ink hover:bg-slate-50" onClick={() => setEditing(task.id)} type="button"><Pencil aria-hidden="true" className="size-4" />Edit</button>
                     </div>
                   </div>

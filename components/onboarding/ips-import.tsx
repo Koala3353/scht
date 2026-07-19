@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from 'react';
-import { inspectIps, type ParsedCurriculumItem } from '@/lib/curriculum/ips-parser';
-import type { AcademicTermName } from '@/lib/curriculum/types';
-import { createClient } from '@/lib/supabase/client';
+import { inspectIps, type ParsedCurriculumItem } from '../../lib/curriculum/ips-parser';
+import type { AcademicTermName } from '../../lib/curriculum/types';
+import { createClient } from '../../lib/supabase/client';
 
 interface IpsImportProps {
   termId: string;
@@ -119,7 +119,7 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
     <p aria-live="polite" className="mt-3 text-sm text-slate-600">Parsed {parsed.rows.length} course{parsed.rows.length === 1 ? '' : 's'} · {parsed.invalidLineCount} invalid line{parsed.invalidLineCount === 1 ? '' : 's'} · Selected program year: Year {selectedProgramYear} · Review {selectedRows.length} item{selectedRows.length === 1 ? '' : 's'} for {termLabel} before import.</p>
     <PreviewRows rows={selectedRows} />
     <button className="mt-6 min-h-11 rounded-xl bg-orange px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60" disabled={isImporting || selectedRows.length === 0} onClick={importCourses} type="button">
-      {isImporting ? 'Importing…' : `Import ${selectedRows.length} courses`}
+      {isImporting ? 'Importing…' : `Import ${selectedRows.length} course${selectedRows.length === 1 ? '' : 's'}`}
     </button>
     {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
     {success && <p className="mt-3 text-sm text-teal" role="status">{success}</p>}

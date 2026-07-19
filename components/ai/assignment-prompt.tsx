@@ -22,11 +22,15 @@ export function buildAssignmentStarterPrompt(
   subjectLabel: string,
   approvedCategoryLabels: string[],
 ): string {
-  void approvedCategoryLabels;
+  const assessmentContext = approvedCategoryLabels
+    .map((label) => label.trim())
+    .filter(Boolean)
+    .join(", ");
   return [
     "Help me start this assignment without writing it for me.",
     `Assignment: ${task.title}`,
     `Course: ${subjectLabel || "Not assigned"}`,
+    assessmentContext ? `Assessment context: ${assessmentContext}` : null,
     task.dueAt ? `Due: ${localDueDate(task.dueAt)}` : null,
     task.description.trim() ? `Brief: ${task.description.trim()}` : null,
     task.links[0] ? `Reference: ${task.links[0]}` : null,
@@ -47,15 +51,18 @@ export function AssignmentPrompt({
   task,
   subjectLabel,
   approvedCategoryLabels,
+  clipboard,
 }: {
   task: AssignmentPromptTask;
   subjectLabel: string;
   approvedCategoryLabels: string[];
+  clipboard?: ClipboardWriter | null;
 }) {
   const [status, setStatus] = useState("");
 
   async function copyPrompt() {
-    if (!navigator.clipboard?.writeText) {
+    const clipboardWriter = clipboard ?? (typeof navigator === "undefined" ? null : navigator.clipboard);
+    if (!clipboardWriter?.writeText) {
       setStatus("Copy is unavailable in this browser. Select and copy the assignment details manually.");
       return;
     }
@@ -63,7 +70,7 @@ export function AssignmentPrompt({
     try {
       await copyAssignmentStarterPrompt(
         buildAssignmentStarterPrompt(task, subjectLabel, approvedCategoryLabels),
-        navigator.clipboard,
+        clipboardWriter,
       );
       setStatus("AI starter prompt copied. Paste it into the AI tool you choose.");
     } catch {
