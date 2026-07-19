@@ -40,8 +40,18 @@ create table private.bootstrap_owner (
   created_at timestamptz not null default timezone('utc', now())
 );
 -- Replace this literal before running. Use an email that is not already in Auth.
-insert into private.bootstrap_owner (email)
-values ('REPLACE_WITH_OWNER_EMAIL@example.com');
+do $$
+declare
+  owner_email text := 'REPLACE_WITH_OWNER_EMAIL@example.com';
+begin
+  if owner_email ~* '^replace_with_owner_email@' then
+    raise exception 'Replace REPLACE_WITH_OWNER_EMAIL@example.com with the new owner email before running this reset.';
+  end if;
+
+  insert into private.bootstrap_owner (email)
+  values (owner_email);
+end;
+$$;
 revoke all on table private.bootstrap_owner from public, anon, authenticated;
 
 create type public.profile_role as enum ('member', 'owner_admin');
