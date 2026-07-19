@@ -333,12 +333,14 @@ begin
   where normalized_email = lower(btrim(coalesce(new.email, '')))
   returning true into bootstrap_owner;
 
-  insert into public.profiles (id, role, display_name)
-  values (
-    new.id,
-    case when coalesce(bootstrap_owner, false) then 'owner_admin'::public.profile_role else 'member'::public.profile_role end,
-    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name')
-  ) on conflict (id) do nothing;
+  if coalesce(bootstrap_owner, false) then
+    insert into public.profiles (id, role, display_name)
+    values (
+      new.id,
+      'owner_admin'::public.profile_role,
+      coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name')
+    ) on conflict (id) do nothing;
+  end if;
   return new;
 end;
 $$;
@@ -515,17 +517,31 @@ $$;
 
 create or replace function public.accept_invite_for_current_user()
 returns boolean language plpgsql security definer set search_path = public as $$
-declare current_email text;
+declare
+  current_email text;
+  accepted_invite public.invites%rowtype;
 begin
   select lower(email) into current_email from auth.users where id = auth.uid();
   if current_email is null then return false; end if;
-  update public.invites set accepted_by = auth.uid(), accepted_at = timezone('utc', now())
+
+  select * into accepted_invite from public.invites
   where normalized_email = current_email and accepted_at is null
-    and (expires_at is null or expires_at > timezone('utc', now()));
-  return found;
+    and (expires_at is null or expires_at > timezone('utc', now()))
+  for update;
+  if not found then return false; end if;
+
+  insert into public.profiles (id, role)
+  values (auth.uid(), accepted_invite.role)
+  on conflict (id) do nothing;
+
+  update public.invites
+  set accepted_by = auth.uid(), accepted_at = timezone('utc', now())
+  where id = accepted_invite.id;
+  return true;
 end;
 $$;
 grant execute on function public.has_available_invite(text) to anon, authenticated;
+revoke all on function public.accept_invite_for_current_user() from public, anon;
 grant execute on function public.accept_invite_for_current_user() to authenticated;
 
 insert into storage.buckets (id, name, public)

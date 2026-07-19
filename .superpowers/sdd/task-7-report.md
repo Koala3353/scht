@@ -33,3 +33,11 @@ Complete. The reset is a manual artifact only. No live SQL, Supabase CLI command
 - The bootstrap owner must be a **new** Auth email. Auth is intentionally preserved, so an existing Auth user cannot fire the signup trigger after profiles are reset. The guide makes this explicit.
 - The literal placeholder is deliberately invalid until replaced; this prevents accidental execution from committing destructive changes.
 - SQL was reviewed statically only. The instructions prohibit executing it; an operator must perform a backup and review it in the correct Supabase Dashboard before manual use.
+
+## Follow-up review remediation
+
+- Reworked `handle_new_user` so ordinary Auth signups do not receive a member profile. It creates a profile only when the non-readable, exact bootstrap row is atomically consumed, preserving the one-owner bootstrap boundary.
+- Reworked `accept_invite_for_current_user` into the only member recovery path. It locks the matching pending invite, creates a missing profile with that invite's role, then marks the invite accepted in the same database transaction. The function is `security definer` and executable only by `authenticated`; no profile-insert RLS policy is granted to PostgREST callers.
+- Reordered `/auth/callback` to invoke the recovery RPC before reading/rejecting a missing profile. Retained Auth users are recoverable by re-inviting their existing email; no new credentials are required.
+- Documented that recovery procedure in `supabase/MASTER_RESET.md` and extended static tests for callback ordering, atomic invite recovery, protected profile creation, required terminal `commit;`, and calendar writes without provider payloads.
+- **GREEN (follow-up):** focused schema/RLS/auth test suite passed (5 files, 14 passed, 2 intentionally skipped live-RLS checks); `npm run lint` and `npm run build` passed. No live SQL, Supabase CLI command, migration application, database reset, or data deletion was executed.

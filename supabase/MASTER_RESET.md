@@ -22,6 +22,10 @@ Before doing anything, create and verify a Supabase database backup. Also export
 6. Complete sign-up and then sign in with the exact bootstrap owner email. The `auth.users` signup trigger creates the profile as `owner_admin` and atomically deletes the private bootstrap row. No arbitrary first account is promoted.
 7. As that owner, verify `/admin`, create invitations, and have members sign in through their invited addresses.
 
+## Recovering retained Auth users
+
+The reset deliberately preserves `auth.users` but removes Scht profiles. Re-invite each retained account through `/admin` after the bootstrap owner signs in. On that account's next normal sign-in, the secured invite-accept function atomically creates or recovers its profile with the invitation's role and marks that invite accepted. No new password, credential, or automatic first-account promotion is required. An Auth account without the exact bootstrap email or a valid pending invitation remains unable to obtain a profile or write workspace data.
+
 If execution fails, the outer transaction rolls back rather than leaving a partial public schema. Do not retry until the error is understood and the backup remains available.
 
 ## Required environment values

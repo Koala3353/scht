@@ -158,7 +158,7 @@ describe('master reset row-level security contract', () => {
     );
     expect(masterReset).toContain('revoke all on table private.bootstrap_owner');
     expect(masterReset).toContain('delete from private.bootstrap_owner');
-    expect(masterReset).toContain("then 'owner_admin'::public.profile_role");
+    expect(masterReset).toContain("'owner_admin'::public.profile_role");
   });
 });
 

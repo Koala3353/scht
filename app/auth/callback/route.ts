@@ -23,31 +23,32 @@ export async function GET(request: NextRequest) {
   const session = authData.session;
   if (!user) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=authentication-failed', isGoogleIntegration);
 
+  const { data: accepted, error: inviteError } = await supabase.rpc('accept_invite_for_current_user');
+  if (inviteError) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
+
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('role, onboarding_completed_at')
     .eq('id', user.id)
     .maybeSingle();
-  if (profileError || !profile) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=access-denied', isGoogleIntegration);
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
+  }
 
-  if (profile.role !== 'owner_admin') {
-    const { data: accepted, error: inviteError } = await supabase.rpc('accept_invite_for_current_user');
-    if (inviteError) return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
+  if (profile.role !== 'owner_admin' && !accepted) {
+    const email = user.email?.trim().toLowerCase();
+    const { data: invite, error: inviteLookupError } = email
+      ? await supabase
+          .from('invites')
+          .select('accepted_by, accepted_at')
+          .eq('normalized_email', email)
+          .maybeSingle()
+      : { data: null, error: new Error('Missing account email.') };
 
-    if (!accepted) {
-      const email = user.email?.trim().toLowerCase();
-      const { data: invite, error: inviteLookupError } = email
-        ? await supabase
-            .from('invites')
-            .select('accepted_by, accepted_at')
-            .eq('normalized_email', email)
-            .maybeSingle()
-        : { data: null, error: new Error('Missing account email.') };
-
-      if (inviteLookupError || invite?.accepted_by !== user.id || !invite.accepted_at) {
-        await supabase.auth.signOut();
-        return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
-      }
+    if (inviteLookupError || invite?.accepted_by !== user.id || !invite.accepted_at) {
+      await supabase.auth.signOut();
+      return redirectTo(request, isGoogleIntegration ? '/settings?integration=google-error' : '/?error=invite-required', isGoogleIntegration);
     }
   }
 

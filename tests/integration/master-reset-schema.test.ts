@@ -9,10 +9,15 @@ const reset = readFileSync(
   path.resolve(testDirectory, "../../supabase/master_reset.sql"),
   "utf8",
 ).toLowerCase();
+const googleSync = readFileSync(
+  path.resolve(testDirectory, "../../app/api/integrations/google/sync/route.ts"),
+  "utf8",
+);
 
 describe("master reset schema contract", () => {
   it("is an explicitly destructive, transactional fresh-deployment reset", () => {
     expect(reset.trimStart().startsWith("begin;")).toBe(true);
+    expect(reset.trimEnd().endsWith("commit;")).toBe(true);
     expect(reset).toContain("raise warning");
     expect(reset).toContain("destructive");
     expect(reset).toContain("drop schema public cascade");
@@ -81,5 +86,10 @@ describe("master reset schema contract", () => {
     ]) {
       expect(reset).not.toContain(forbidden);
     }
+  });
+
+  it("stores only normalized calendar fields, never a provider payload", () => {
+    expect(googleSync).toContain('from("calendar_events").upsert(events');
+    expect(googleSync).not.toMatch(/\braw\s*:/);
   });
 });
