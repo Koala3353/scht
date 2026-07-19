@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { ProductTour } from "@/components/marketing/product-tour";
+import { ConnectionFeatureSwitcher } from "@/components/marketing/connection-feature-switcher";
 
 const workflow = [
   {
@@ -320,45 +321,7 @@ export function LandingPage() {
               clear, reviewable, and scoped to the way you choose to work.
             </p>
           </div>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <span className="rounded-full bg-white px-4 py-2 font-bold shadow-sm">
-              Google Calendar
-            </span>
-            <span className="rounded-full bg-white px-4 py-2 font-bold shadow-sm">
-              Gmail
-            </span>
-            <span className="rounded-full bg-white px-4 py-2 font-bold shadow-sm">
-              Canvas
-            </span>
-            <span className="rounded-full bg-white px-4 py-2 font-bold shadow-sm">
-              Private AI vault
-            </span>
-            <span className="rounded-full bg-white px-4 py-2 font-bold shadow-sm">
-              Apps Script reminders
-            </span>
-          </div>
-          <div className="mt-10 grid gap-3 md:grid-cols-3">
-            <div className="border-t-2 border-teal pt-4">
-              <p className="font-black">Review before change</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                AI proposes tasks; you decide what enters your planner.
-              </p>
-            </div>
-            <div className="border-t-2 border-[#345d9d] pt-4">
-              <p className="font-black">Your data stays yours</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                Encrypted credentials and scoped connections keep the boundary
-                clear.
-              </p>
-            </div>
-            <div className="border-t-2 border-action pt-4">
-              <p className="font-black">Reminders with restraint</p>
-              <p className="mt-2 text-sm leading-6 text-slate-700">
-                Set your time zone and quiet hours, then let the right prompt
-                arrive.
-              </p>
-            </div>
-          </div>
+          <ConnectionFeatureSwitcher />
         </div>
       </section>
       <ProductTour />
