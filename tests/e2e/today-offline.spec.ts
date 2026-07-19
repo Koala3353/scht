@@ -1,8 +1,12 @@
 import { expect, test } from "playwright/test";
 
-// A fixture must provide an already-authenticated student with a current term and
-// a writable Supabase project. CI intentionally does not provide those secrets.
-test.skip(process.env.PLAYWRIGHT_TASK_FIXTURE !== "1", "Requires authenticated task-sync browser fixtures.");
+// Opt in only with PLAYWRIGHT_TASK_FIXTURE=1 plus PLAYWRIGHT_STORAGE_STATE pointing
+// to an authenticated student session with a current term and writable Supabase data.
+// CI intentionally supplies neither secret nor storage state.
+const hasAuthenticatedFixture =
+  process.env.PLAYWRIGHT_TASK_FIXTURE === "1" && Boolean(process.env.PLAYWRIGHT_STORAGE_STATE);
+
+test.skip(!hasAuthenticatedFixture, "Requires explicit authenticated task-sync browser fixtures.");
 
 test("a detailed task created offline reconnects as exactly one synced task", async ({ page, context }) => {
   const title = `Offline field report ${Date.now()}`;
