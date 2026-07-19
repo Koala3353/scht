@@ -31,6 +31,19 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item
   return results;
 }
 
+function compactCanvasText(value: string | null | undefined, fallback: string, maxLength: number) {
+  const compact = value?.replace(/\s+/g, " ").trim() || fallback;
+  return compact.slice(0, maxLength);
+}
+
+function canvasCourseCode(course: CanvasCourse) {
+  const fallback = "CANVAS-" + course.id;
+  const code = compactCanvasText(course.course_code, fallback, 32);
+  return code.length < 32 || course.course_code?.trim().length === code.length
+    ? code
+    : (code.slice(0, 23) + "-" + course.id).slice(0, 32);
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -83,8 +96,8 @@ export async function POST(request: Request) {
     const subjects = courses.map((course) => ({
       user_id: user.id,
       term_id: profile.current_term_id,
-      code: course.course_code || `CANVAS-${course.id}`,
-      name: course.name,
+      code: canvasCourseCode(course),
+      name: compactCanvasText(course.name, "Canvas course " + course.id, 180),
       canvas_course_id: String(course.id),
     }));
     const { data: savedSubjects, error: subjectError } = subjects.length
@@ -100,12 +113,12 @@ export async function POST(request: Request) {
         subject_id: subject.id,
         source: "canvas",
         source_id: `${subject.canvas_course_id}:${assignment.id}`,
-        title: assignment.name,
+        title: compactCanvasText(assignment.name, "Untitled Canvas assignment", 180),
         kind: "school",
         due_at: assignment.due_at,
         priority: "normal",
         weight_percent: null,
-        notes: assignment.description,
+        notes: assignment.description?.slice(0, 20_000) ?? null,
         links: assignment.html_url ? [assignment.html_url] : [],
       }));
       if (!tasks.length) return 0;

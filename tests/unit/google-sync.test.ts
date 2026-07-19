@@ -183,4 +183,15 @@ describe("Google sync", () => {
     await expect(googleApi({ accessToken: "token" }, "https://example.test/one", "Gmail")).rejects.toMatchObject<Partial<GoogleApiError>>({ kind: "needs_reauth" });
     await expect(googleApi({ accessToken: "token" }, "https://example.test/two", "Gmail")).rejects.toMatchObject<Partial<GoogleApiError>>({ kind: "permission", message: expect.stringContaining("Gmail read-only permission") });
   });
+
+  it("explains when Gmail is disabled while Calendar remains available", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(response({
+      error: { message: "Gmail API has not been used in project 123 before or it is disabled." },
+    }, 403))));
+
+    await expect(googleApi({ accessToken: "token" }, "https://example.test/gmail", "Gmail")).rejects.toMatchObject<Partial<GoogleApiError>>({
+      kind: "unavailable",
+      message: expect.stringContaining("Gmail API is not enabled"),
+    });
+  });
 });

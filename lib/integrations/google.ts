@@ -42,10 +42,20 @@ function permissionName(service: string) {
 function classifiedError(service: string, status: number, payload: unknown, retryAfter: number | undefined) {
   const normalised = errorDetail(payload).toLowerCase();
   if (status === 401 || (status === 400 && normalised.includes("invalid_grant"))) return new GoogleApiError("needs_reauth", `${service} authorization has expired. Reconnect Google and try again.`);
+  if (
+    service === "Gmail" &&
+    (
+      normalised.includes("gmail api has not been used") ||
+      normalised.includes("gmail api is disabled") ||
+      normalised.includes("access not configured")
+    )
+  ) {
+    return new GoogleApiError("unavailable", "Gmail API is not enabled for this Google Cloud project. An administrator must enable the Gmail API, then try again.");
+  }
   if (status === 403 && (normalised.includes("insufficient authentication scopes") || normalised.includes("insufficient permission") || normalised.includes("required authentication credential"))) {
     return new GoogleApiError("permission", `${service} permission is missing. Reconnect Google and approve the ${permissionName(service)} permission.`);
   }
-  if (status === 429) return new GoogleApiError("rate_limited", `${service} is temporarily rate-limited.`, retryAfter);
+  if (status === 429 || normalised.includes("rate limit") || normalised.includes("quota exceeded")) return new GoogleApiError("rate_limited", `${service} is temporarily rate-limited.`, retryAfter);
   if (status >= 500 && status <= 599) return new GoogleApiError("unavailable", `${service} is temporarily unavailable. Try again shortly.`);
   return new GoogleApiError("unknown", `${service} could not be refreshed. Try again.`);
 }
