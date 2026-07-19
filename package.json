@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run --config vitest.paths.config.ts --environment jsdom",
+    "test": "vitest run --config vitest.paths.config.ts --environment jsdom --exclude='tests/e2e/**' --exclude='scht-foundation/**'",
+    "test:unit": "vitest run --config vitest.paths.config.ts --environment jsdom --exclude='tests/e2e/**' --exclude='scht-foundation/**'",
     "test:e2e": "playwright test"
   },
   "dependencies": {
