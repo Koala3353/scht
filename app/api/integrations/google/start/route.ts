@@ -8,8 +8,7 @@ export async function GET(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL('/?error=authentication-required', request.url));
 
-  const callbackUrl = new URL("/auth/callback", process.env.NEXT_PUBLIC_APP_URL ?? request.url);
-  callbackUrl.searchParams.set("integration", "google");
+  const callbackUrl = new URL("/api/integrations/google/callback", process.env.NEXT_PUBLIC_APP_URL ?? request.url);
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -22,7 +21,7 @@ export async function GET(request: NextRequest) {
   if (error || !data.url) return NextResponse.redirect(new URL('/settings?integration=google-error', request.url));
 
   const response = NextResponse.redirect(data.url);
-  response.cookies.set(pendingCookie, '1', {
+  response.cookies.set(pendingCookie, user.id, {
     httpOnly: true,
     maxAge: 10 * 60,
     path: '/',

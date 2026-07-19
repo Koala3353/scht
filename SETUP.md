@@ -102,9 +102,10 @@ In Supabase Dashboard → Authentication → URL Configuration:
   ```text
   http://localhost:3001/auth/callback
   https://scht-admu.vercel.app/auth/callback
+  https://scht-admu.vercel.app/api/integrations/google/callback
   ```
 
-  Add your own Vercel production URL instead if it differs. Add a preview URL only when you deliberately support auth in previews.
+  The first two URLs handle sign-in; the third is the dedicated Calendar/Gmail connection return. Add your own Vercel production URL instead if it differs. Add a preview URL only when you deliberately support auth in previews.
 
 Supabase is the application’s authentication authority. Keep email confirmation and redirect settings appropriate to your institution’s policy.
 
@@ -114,14 +115,8 @@ Scht uses one Google **Web application** OAuth client via Supabase. Its Calendar
 
 1. In [Google Auth Platform](https://console.cloud.google.com/auth), select project `scht-502902` (or the value of `GOOGLE_CLOUD_PROJECT_ID`).
 2. In Google Cloud → APIs & Services → Library, enable **Google Calendar API** and **Gmail API** for this project.
-3. Complete branding and audience setup. Set the application home page to `https://scht-admu.vercel.app`, the privacy policy URL to `https://scht-admu.vercel.app/privacy`, and the terms of service URL to `https://scht-admu.vercel.app/terms`. For an External app in **Testing**, add every person who needs Google sign-in or Calendar/Gmail sync at [Google Auth Platform → Audience → Test users](https://console.cloud.google.com/auth/audience?project=scht-502902).
-4. Add the Calendar and Gmail read-only scopes to the consent configuration:
-
-   ```text
-   https://www.googleapis.com/auth/calendar.readonly
-   https://www.googleapis.com/auth/gmail.readonly
-   ```
-
+3. Complete branding and audience setup. In **Data Access**, add and save `openid`, `https://www.googleapis.com/auth/userinfo.email`, `https://www.googleapis.com/auth/userinfo.profile`, `https://www.googleapis.com/auth/calendar.readonly`, and `https://www.googleapis.com/auth/gmail.readonly`. Then set the application home page to `https://scht-admu.vercel.app`, the privacy policy URL to `https://scht-admu.vercel.app/privacy`, and the terms of service URL to `https://scht-admu.vercel.app/terms`. For an External app in **Testing**, add every person who needs Google sign-in or Calendar/Gmail sync at [Google Auth Platform → Audience → Test users](https://console.cloud.google.com/auth/audience?project=scht-502902).
+4. If Google previously granted only sign-in access, remove Scht from [Google Account third-party connections](https://myaccount.google.com/permissions) and reconnect after saving the scopes.
 5. Create one Web application OAuth client at [Create OAuth client](https://console.cloud.google.com/auth/clients/create?project=scht-502902). The client’s **Authorized redirect URI** must be exactly:
 
    ```text
