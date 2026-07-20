@@ -116,12 +116,15 @@ export async function POST(request: Request) {
       continue;
     }
 
+    // Task changes now go directly to Supabase (there is no local outbox), so
+    // a client snapshot may be older than a provider sync. Update the owned
+    // row server-authoritatively instead of rejecting a valid completion for
+    // a stale updated_at timestamp.
     const { data, error } = await supabase
       .from('tasks')
       .update(row)
       .eq('id', parsedTask.data.id)
       .eq('user_id', user.id)
-      .eq('updated_at', mutation.baseUpdatedAt)
       .select(taskColumns)
       .maybeSingle();
 
@@ -135,21 +138,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const { data: canonical } = await supabase
-      .from('tasks')
-      .select(taskColumns)
-      .eq('id', parsedTask.data.id)
-      .eq('user_id', user.id)
-      .maybeSingle();
-    response.rejected.push(
-      rejection(
-        mutation.id,
-        'This task changed on another device.',
-        'conflict',
-        canonical ? toTaskView(canonical as TaskRow) : undefined,
-        parsedTask.data.id,
-      ),
-    );
+    response.rejected.push(rejection(mutation.id, 'This task no longer exists or you no longer have access to it.', 'rejected', undefined, parsedTask.data.id));
   }
 
   return NextResponse.json(response);

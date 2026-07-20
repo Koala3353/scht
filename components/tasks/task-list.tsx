@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ExternalLink, Pencil, RotateCcw } from "lucide-react";
+import { CheckCircle2, ExternalLink, LoaderCircle, Pencil, RotateCcw } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
 import { AssignmentPrompt } from "../ai/assignment-prompt";
@@ -36,14 +36,29 @@ function relativeDue(dueAt: string | null | undefined) {
 
 export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave, initialEditingId = null, approvedCategoryLabelsBySubject = {} }: TaskListProps) {
   const [editing, setEditing] = useState<string | null>(initialEditingId);
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState("");
   const hydrated = useHasHydrated();
   const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
   const projectLabels = new Map(projects.map((project) => [project.id, project.label]));
 
   if (!tasks.length) return <p className="rounded-xl bg-[#f7faf9] p-4 text-sm text-slate-700">No tasks match these filters.</p>;
 
+  async function toggleCompletion(task: CachedTask) {
+    setSavingTaskId(task.id);
+    setActionError("");
+    try {
+      await onSave({ ...task, completedAt: task.completedAt ? null : new Date().toISOString(), updatedAt: new Date().toISOString() }, task.updatedAt);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Could not save this task.");
+    } finally {
+      setSavingTaskId(null);
+    }
+  }
+
   return (
     <ol className="space-y-3" aria-label="Tasks">
+      {actionError ? <li className="rounded-xl border border-action/30 bg-[#fff8f3] px-3 py-2 text-sm font-semibold text-action" role="alert">{actionError}</li> : null}
       {tasks.map((task) => {
         const isEditing = editing === task.id;
         const needsReview = task.syncState === "conflict" || task.syncState === "rejected";
@@ -56,9 +71,9 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
               <TaskEditor currentTermId={currentTermId} onCancel={() => setEditing(null)} onSave={async (nextTask, baseUpdatedAt) => { await onSave(nextTask, baseUpdatedAt); setEditing(null); }} projects={projects} subjects={subjects} task={task} terms={terms} />
             ) : (
               <div className="flex gap-3">
-                <button aria-label={task.completedAt ? `Reopen ${task.title}` : `Complete ${task.title}`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:border-teal hover:bg-[#e6f2f0] hover:text-teal disabled:cursor-not-allowed disabled:opacity-50" disabled={needsReview} onClick={() => { void Promise.resolve(onSave({ ...task, completedAt: task.completedAt ? null : new Date().toISOString(), updatedAt: new Date().toISOString() }, task.updatedAt)).catch(() => undefined); }} type="button">
-                  {task.completedAt ? <RotateCcw aria-hidden="true" className="size-5" /> : <CheckCircle2 aria-hidden="true" className="size-5" />}
-                  <span>{task.completedAt ? "Reopen" : "Mark done"}</span>
+                <button aria-label={task.completedAt ? `Reopen ${task.title}` : `Complete ${task.title}`} aria-busy={savingTaskId === task.id} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:border-teal hover:bg-[#e6f2f0] hover:text-teal disabled:cursor-not-allowed disabled:opacity-50" disabled={needsReview || savingTaskId === task.id} onClick={() => void toggleCompletion(task)} type="button">
+                  {savingTaskId === task.id ? <LoaderCircle aria-hidden="true" className="size-5 animate-spin" /> : task.completedAt ? <RotateCcw aria-hidden="true" className="size-5" /> : <CheckCircle2 aria-hidden="true" className="size-5" />}
+                  <span>{savingTaskId === task.id ? "Saving…" : task.completedAt ? "Reopen" : "Mark done"}</span>
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-3">

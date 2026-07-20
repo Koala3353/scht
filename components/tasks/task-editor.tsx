@@ -148,7 +148,7 @@ export function TaskEditor({
         <textarea className="min-h-20 rounded-xl border border-slate-300 px-3 py-2" id="task-links" maxLength={12000} onChange={(event) => setLinksText(event.target.value)} value={linksText} />
       </label>
       <div className="flex flex-wrap gap-3 sm:col-span-2">
-        <button className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white disabled:opacity-60" disabled={saving || !draft.title.trim()} type="submit">{submitLabel}</button>
+        <button aria-busy={saving} className="min-h-11 rounded-xl bg-action px-4 py-2 text-sm font-bold text-white disabled:opacity-60" disabled={saving || !draft.title.trim()} type="submit">{saving ? "Saving…" : submitLabel}</button>
         {onCancel && <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-ink" onClick={onCancel} type="button">Cancel</button>}
       </div>
     </form>

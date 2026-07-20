@@ -117,7 +117,7 @@ describe('POST /api/sync/tasks', () => {
     expect(mocks.from).not.toHaveBeenCalled();
   });
 
-  it('returns the canonical row when a conditional update conflicts', async () => {
+  it('reports a missing owned task when a direct Supabase update finds no row', async () => {
     mocks.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
     const updateChain = {
       eq: vi.fn(),
@@ -127,12 +127,7 @@ describe('POST /api/sync/tasks', () => {
     updateChain.select.mockReturnValue({ maybeSingle: mocks.updateMaybeSingle });
     mocks.update.mockReturnValue(updateChain);
     mocks.updateMaybeSingle.mockResolvedValue({ data: null, error: null });
-    const selectChain = { eq: vi.fn(), maybeSingle: mocks.canonicalMaybeSingle };
-    selectChain.eq.mockReturnValue(selectChain);
-    mocks.canonicalMaybeSingle.mockResolvedValue({ data: row, error: null });
-    mocks.from
-      .mockReturnValueOnce({ update: mocks.update })
-      .mockReturnValueOnce({ select: vi.fn(() => selectChain) });
+    mocks.from.mockReturnValueOnce({ update: mocks.update });
 
     const response = await POST(request([mutation({ baseUpdatedAt: updatedAt })]));
 
@@ -140,12 +135,11 @@ describe('POST /api/sync/tasks', () => {
       accepted: [],
       rejected: [{
         id: 'mutation-1',
-        reason: 'This task changed on another device.',
-        syncState: 'conflict',
+        reason: 'This task no longer exists or you no longer have access to it.',
+        syncState: 'rejected',
         taskId,
-        task: expect.objectContaining({ id: taskId, updatedAt }),
       }],
     });
-    expect(updateChain.eq).toHaveBeenCalledWith('updated_at', updatedAt);
+    expect(updateChain.eq).not.toHaveBeenCalledWith('updated_at', updatedAt);
   });
 });

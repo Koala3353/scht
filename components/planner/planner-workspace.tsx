@@ -60,6 +60,7 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
       setSaveFailure(null);
     } catch (error) {
       setSaveFailure({ task, baseUpdatedAt, reason: error instanceof Error ? error.message : "Task could not be saved." });
+      throw error;
     }
   }
 

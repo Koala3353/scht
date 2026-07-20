@@ -49,6 +49,7 @@ export function SubjectTaskQueue({
       setSaveFailure(null);
     } catch (error) {
       setSaveFailure({ task, baseUpdatedAt, reason: error instanceof Error ? error.message : "Task sync failed. Retry this saved change." });
+      throw error;
     }
   }
 
