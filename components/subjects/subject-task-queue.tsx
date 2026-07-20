@@ -48,12 +48,12 @@ export function SubjectTaskQueue({
       const result = await saveLocalTask(task, baseUpdatedAt);
       const rejected = result.rejected.find((candidate) => candidate.taskId === task.id);
       if (result.networkError || rejected) {
-        setSaveFailure({ task, baseUpdatedAt, reason: rejected?.reason ?? "Task sync failed. Retry this saved change." });
+        setSaveFailure({ task, baseUpdatedAt, reason: rejected?.reason ?? result.networkErrorMessage ?? "Task sync failed. Retry this saved change." });
       } else {
         setSaveFailure(null);
       }
-    } catch {
-      setSaveFailure({ task, baseUpdatedAt, reason: "Task sync failed. Retry this saved change." });
+  } catch (error) {
+      setSaveFailure({ task, baseUpdatedAt, reason: error instanceof Error ? error.message : "Task sync failed. Retry this saved change." });
     }
   }
 

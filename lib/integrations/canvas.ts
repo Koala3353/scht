@@ -1,5 +1,13 @@
 export interface CanvasCourse { id: number; course_code?: string | null; name?: string | null; }
-export interface CanvasAssignment { id: number; name?: string | null; due_at: string | null; points_possible: number | null; html_url?: string | null; description?: string | null; }
+export interface CanvasAssignment {
+  id: number;
+  name?: string | null;
+  due_at: string | null;
+  points_possible: number | null;
+  html_url?: string | null;
+  description?: string | null;
+  submission?: { workflow_state?: string | null; submitted_at?: string | null; excused?: boolean | null } | null;
+}
 
 function nextCanvasPage(linkHeader: string | null, origin: string) {
   const segment = linkHeader?.split(",").find((part) => /;\s*rel="?next"?/i.test(part));

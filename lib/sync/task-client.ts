@@ -12,7 +12,12 @@ export async function postTaskMutations(mutations: TaskMutation[]): Promise<Task
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ mutations }),
   });
-  if (!response.ok) throw new Error("Task sync failed.");
+  if (!response.ok) {
+    const body = typeof response.json === "function"
+      ? await response.json().catch(() => ({})) as { error?: unknown }
+      : {};
+    throw new Error(typeof body.error === "string" ? body.error : "Task sync failed.");
+  }
   return response.json() as Promise<TaskSyncResponse>;
 }
 

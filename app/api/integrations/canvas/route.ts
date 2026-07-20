@@ -44,6 +44,17 @@ function canvasCourseCode(course: CanvasCourse) {
     : (code.slice(0, 23) + "-" + course.id).slice(0, 32);
 }
 
+function assignmentIsFinished(assignment: CanvasAssignment) {
+  const submission = assignment.submission;
+  const workflowState = submission?.workflow_state?.toLowerCase();
+  return submission?.excused === true
+    || Boolean(submission?.submitted_at)
+    || workflowState === "submitted"
+    || workflowState === "graded"
+    || workflowState === "pending_review"
+    || workflowState === "complete";
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -148,8 +159,21 @@ export async function POST(request: Request) {
     const savedSubjects = [...matchedSubjects, ...updatedManualSubjects, ...(insertedSubjects ?? [])];
 
     const assignmentCounts = await mapWithConcurrency(savedSubjects ?? [], 3, async (subject) => {
-      const assignments = await canvasApi<CanvasAssignment[]>(credentials.baseUrl, credentials.token, `/courses/${subject.canvas_course_id}/assignments?per_page=100`);
-      const tasks = assignments.map((assignment) => ({
+      const assignments = await canvasApi<CanvasAssignment[]>(credentials.baseUrl, credentials.token, `/courses/${subject.canvas_course_id}/assignments?include[]=submission&per_page=100`);
+      const completedSourceIds = assignments
+        .filter(assignmentIsFinished)
+        .map((assignment) => `${subject.canvas_course_id}:${assignment.id}`);
+      if (completedSourceIds.length) {
+        const { error: completeError } = await supabase
+          .from("tasks")
+          .update({ completed_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .eq("source", "canvas")
+          .in("source_id", completedSourceIds)
+          .is("completed_at", null);
+        if (completeError) throw new Error("Could not mark submitted Canvas assignments as complete.");
+      }
+      const tasks = assignments.filter((assignment) => !assignmentIsFinished(assignment)).map((assignment) => ({
         user_id: user.id,
         term_id: profile.current_term_id,
         subject_id: subject.id,

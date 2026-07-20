@@ -63,4 +63,6 @@ export interface TaskSyncResponse {
   nextRetryAt?: number;
   /** A transport failure deferred pending mutations rather than receiving a server response. */
   networkError?: boolean;
+  /** Safe transport detail shown to the user while the durable outbox retries. */
+  networkErrorMessage?: string;
 }

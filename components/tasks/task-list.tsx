@@ -52,8 +52,9 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
               <TaskEditor currentTermId={currentTermId} onCancel={() => setEditing(null)} onSave={async (nextTask, baseUpdatedAt) => { await onSave(nextTask, baseUpdatedAt); setEditing(null); }} projects={projects} subjects={subjects} task={task} terms={terms} />
             ) : (
               <div className="flex gap-3">
-                <button aria-label={task.completedAt ? `Reopen ${task.title}` : `Complete ${task.title}`} className="grid size-11 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 hover:border-teal hover:bg-[#e6f2f0] hover:text-teal disabled:cursor-not-allowed disabled:opacity-50" disabled={needsReview} onClick={() => void onSave({ ...task, completedAt: task.completedAt ? null : new Date().toISOString(), updatedAt: new Date().toISOString() }, task.updatedAt)} type="button">
+                <button aria-label={task.completedAt ? `Reopen ${task.title}` : `Complete ${task.title}`} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:border-teal hover:bg-[#e6f2f0] hover:text-teal disabled:cursor-not-allowed disabled:opacity-50" disabled={needsReview} onClick={() => void onSave({ ...task, completedAt: task.completedAt ? null : new Date().toISOString(), updatedAt: new Date().toISOString() }, task.updatedAt)} type="button">
                   {task.completedAt ? <RotateCcw aria-hidden="true" className="size-5" /> : <CheckCircle2 aria-hidden="true" className="size-5" />}
+                  <span>{task.completedAt ? "Reopen" : "Mark done"}</span>
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-start justify-between gap-3">

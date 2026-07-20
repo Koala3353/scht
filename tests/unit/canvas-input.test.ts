@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   decryptCredentials: vi.fn(),
   encryptCredentials: vi.fn(),
   subjectsInsert: vi.fn(),
+  tasksUpdate: vi.fn(),
   tasksUpsert: vi.fn(),
 }));
 
@@ -32,7 +33,7 @@ function syncRequest() {
   });
 }
 
-function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existingSourceIds: string[] = []) {
+function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existingSourceIds: string[] = [], assignments: Array<Record<string, unknown>> | null = null) {
   const connectionQuery = {
     eq: vi.fn(),
     maybeSingle: vi.fn(async () => ({ data: { id: "connection-1", encrypted_credentials: "dGVzdA==" }, error: null })),
@@ -48,6 +49,7 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
   const ignoredDuplicateMutation = { select: vi.fn(async () => ({ data: [], error: null })) };
   const tasksTable = {
     upsert: mocks.tasksUpsert.mockImplementation(() => existingSourceIds.length ? ignoredDuplicateMutation : mutation(errorAt === "tasks")),
+    update: mocks.tasksUpdate.mockImplementation(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ in: vi.fn(() => ({ is: vi.fn(async () => ({ error: null })) })) })) })) })),
   };
   mocks.createClient.mockResolvedValue({
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },
@@ -67,9 +69,10 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
     }),
   });
   mocks.decryptCredentials.mockReturnValue({ baseUrl: "https://canvas.example.edu", token: "valid-token" });
-  mocks.canvasApi.mockImplementation(async (_baseUrl: string, _token: string, path: string) => path.startsWith("/courses?")
-    ? [{ id: 42, course_code: "TEST-42", name: "Testing" }]
-    : [{ id: 1, name: "Assignment", due_at: null, points_possible: null, html_url: "https://canvas.example.edu/courses/42/assignments/1", description: "Description" }]);
+  mocks.canvasApi.mockImplementation(async (_baseUrl: string, _token: string, path: string) => {
+    if (path.startsWith("/courses?")) return [{ id: 42, course_code: "TEST-42", name: "Testing" }];
+    return assignments ?? [{ id: 1, name: "Assignment", due_at: null, points_possible: null, html_url: "https://canvas.example.edu/courses/42/assignments/1", description: "Description" }];
+  });
 }
 
 describe("Canvas connection input", () => {
@@ -144,5 +147,17 @@ describe("Canvas sync persistence", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.subjectsInsert).toHaveBeenCalledWith(expect.any(Array));
+  });
+
+  it("does not create tasks for submitted Canvas assignments and closes prior imported copies", async () => {
+    setupSync(null, [], [{ id: 1, name: "Submitted assignment", due_at: null, points_possible: null, submission: { workflow_state: "graded", submitted_at: "2026-07-20T10:00:00.000Z" } }]);
+
+    const response = await POST(syncRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ assignments: 0 });
+    expect(mocks.tasksUpsert).not.toHaveBeenCalled();
+    expect(mocks.tasksUpdate).toHaveBeenCalledWith(expect.objectContaining({ completed_at: expect.any(String) }));
   });
 });

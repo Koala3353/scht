@@ -39,7 +39,7 @@ function retryDelay(attempts: number) {
   return Math.min(300_000, 1_000 * 2 ** attempts);
 }
 
-async function deferMutations(mutations: TaskMutation[]) {
+async function deferMutations(mutations: TaskMutation[], reason = 'Task sync failed. We will retry automatically.') {
   const now = Date.now();
 
   await taskDb.transaction('rw', taskDb.outbox, async () => {
@@ -51,7 +51,7 @@ async function deferMutations(mutations: TaskMutation[]) {
           nextAttemptAt: now + retryDelay(attempts),
           syncState: 'pending',
           inFlight: false,
-          syncError: 'Sync failed. We will retry automatically.',
+          syncError: reason,
         });
       }),
     );
@@ -285,13 +285,15 @@ export async function flushTaskOutbox(
   let response: TaskSyncResponse;
   try {
     response = await fetcher(mutationsToFlush);
-  } catch {
-    await deferMutations(mutationsToFlush);
+  } catch (error) {
+    const networkErrorMessage = error instanceof Error && error.message ? error.message : 'Task sync failed. We will retry automatically.';
+    await deferMutations(mutationsToFlush, networkErrorMessage);
     return {
       accepted: [],
       rejected: [],
       nextRetryAt: await nextRetryAt(userId),
       networkError: true,
+      networkErrorMessage,
     };
   }
 
