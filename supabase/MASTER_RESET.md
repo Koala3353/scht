@@ -31,7 +31,7 @@ If execution fails, the outer transaction rolls back rather than leaving a parti
 
 ## Repairing server-role access on an existing reset
 
-If the app reports that it cannot verify workspace access after a reset, run `supabase/migrations/0014_restore_service_role_grants.sql` once in the same project's SQL Editor. The reset now includes those grants automatically; the small repair query is only for an already-reset project.
+If the app reports that it cannot verify workspace access after a reset, run `supabase/migrations/0014_restore_service_role_grants.sql` once in the same project's SQL Editor. It restores the server role and the RLS-governed authenticated client privileges; the reset now includes both automatically.
 
 ## Required environment values
 

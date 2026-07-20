@@ -10,6 +10,7 @@ export default async function AdminPage() {
   await requireOwnerAdmin({
     unauthenticatedRedirect: "/admin/sign-in?error=sign-in-required",
     unauthorizedRedirect: "/admin/sign-in?error=not-owner",
+    accessCheckFailureRedirect: "/admin/sign-in?error=workspace-access-check-failed",
   });
   const supabase = await createClient();
   const [

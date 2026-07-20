@@ -12,6 +12,7 @@ export interface AuthenticatedUser {
 interface AuthRedirectOptions {
   unauthenticatedRedirect?: string;
   unauthorizedRedirect?: string;
+  accessCheckFailureRedirect?: string;
 }
 
 export async function requireUser(
@@ -33,8 +34,16 @@ export async function requireUser(
     .eq('id', user.id)
     .maybeSingle();
 
+  if (profileError) {
+    if (options.accessCheckFailureRedirect) {
+      redirect(options.accessCheckFailureRedirect);
+    }
+    if (options.unauthorizedRedirect) redirect(options.unauthorizedRedirect);
+    forbidden();
+  }
+
   const role = profile?.role;
-  if (profileError || (role !== 'member' && role !== 'owner_admin')) {
+  if (role !== 'member' && role !== 'owner_admin') {
     if (options.unauthorizedRedirect) redirect(options.unauthorizedRedirect);
     forbidden();
   }

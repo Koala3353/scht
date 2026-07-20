@@ -76,6 +76,12 @@ describe("master reset schema contract", () => {
 
   it("restores server-only service-role privileges after rebuilding public", () => {
     expect(reset).toContain(
+      "grant select, insert, update, delete on all tables in schema public to authenticated;",
+    );
+    expect(reset).toContain(
+      "grant usage, select on all sequences in schema public to authenticated;",
+    );
+    expect(reset).toContain(
       "grant all privileges on all tables in schema public to service_role;",
     );
     expect(reset).toContain(
