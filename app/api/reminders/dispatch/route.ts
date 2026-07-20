@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     return error ? NextResponse.json({ error: error.message }, { status: 502 }) : NextResponse.json({ acknowledged: true });
   }
   if (!body.reminderId) return NextResponse.json({ error: "Reminder acknowledgement is required." }, { status: 400 });
-  const status = body.success ? "delivered" : "pending";
+  const status = body.success ? "sent" : "pending";
   const update = body.success ? { status, attempts: 1, deferred_reason: null } : { status, deferred_reason: body.error ?? "Delivery failed", attempts: 1 };
   const { error } = await supabase.from("reminder_queue").update(update).eq("id", body.reminderId).eq("idempotency_key", body.idempotencyKey);
   if (error) return NextResponse.json({ error: error.message }, { status: 502 });

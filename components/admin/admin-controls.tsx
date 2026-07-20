@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useToast } from "../feedback/toast-provider";
 
-type Profile = { id: string; display_name: string | null };
+type Profile = { id: string; display_name?: string | null; displayName?: string | null; email?: string | null };
 type ProvisionedAccount = { email: string; googleAudienceUrl: string };
 
 export function AdminControls({ profiles }: { profiles: Profile[] }) {
@@ -203,7 +203,7 @@ export function AdminControls({ profiles }: { profiles: Profile[] }) {
             ) : null}
             {profiles.map((profile) => (
               <option key={profile.id} value={profile.id}>
-                {profile.display_name || profile.id}
+                {profile.displayName || profile.display_name || profile.email || profile.id}
               </option>
             ))}
           </select>
