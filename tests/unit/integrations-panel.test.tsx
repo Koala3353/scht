@@ -54,4 +54,16 @@ describe("IntegrationsPanel", () => {
     expect(screen.getAllByText(/Gmail is temporarily rate-limited/)).toHaveLength(1);
     expect(screen.queryByRole("link", { name: "Reconnect Google" })).toBeNull();
   });
+
+  it("loads saved Gmail task filters for editing", () => {
+    renderPanel({
+      status: "connected",
+      last_synced_at: null,
+      error_message: null,
+      settings: { gmailTaskFilters: { taskTriggers: ["assignment"], excludedPhrases: ["sale"] } },
+    });
+
+    expect((screen.getByLabelText(/Task triggers/) as HTMLTextAreaElement).value).toBe("assignment");
+    expect((screen.getByLabelText(/Never create a task/) as HTMLTextAreaElement).value).toBe("sale");
+  });
 });

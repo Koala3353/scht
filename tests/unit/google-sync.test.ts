@@ -134,7 +134,7 @@ describe("Google sync", () => {
       if (url.includes("calendar")) return Promise.resolve(response({ items: [] }));
       if (url.includes("messages?")) return Promise.resolve(response({ messages: [{ id: "gmail-1" }, { id: "gmail-2" }] }));
       const id = url.split("/").at(-1)?.split("?")[0];
-      return Promise.resolve(response({ id, snippet: "Follow up", payload: { headers: [{ name: "Subject", value: "Review" }] } }));
+      return Promise.resolve(response({ id, snippet: "Follow up", payload: { headers: [{ name: "Subject", value: "Assignment review" }] } }));
     }));
 
     const result = await POST();

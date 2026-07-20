@@ -80,7 +80,7 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
       return;
     }
 
-    const { error: importError } = await supabase.from('curriculum_items').upsert(
+    const { data: curriculumItems, error: importError } = await supabase.from('curriculum_items').upsert(
       selectedRows.map((row) => ({
         user_id: userData.user.id,
         term_id: termId,
@@ -95,10 +95,35 @@ export function IpsImport({ academicYear, termId, termLabel, termName }: IpsImpo
         import_source: 'ips',
       })),
       { onConflict: 'user_id,academic_year,term,course_code' },
-    );
+    ).select('id, course_code');
 
     if (importError) setError(importError.message);
-    else setSuccess(`Imported ${selectedRows.length} course${selectedRows.length === 1 ? '' : 's'} for ${termLabel}.`);
+    else {
+      const { data: existingSubjects, error: subjectReadError } = await supabase
+        .from('subjects')
+        .select('id, code')
+        .eq('user_id', userData.user.id)
+        .eq('term_id', termId);
+      if (subjectReadError) setError('Curriculum was saved, but we could not activate its subject workspaces.');
+      else {
+        const existingByCode = new Map((existingSubjects ?? []).map((subject) => [subject.code.trim().toLowerCase(), subject.id]));
+        const missingSubjects = selectedRows.filter((row) => !existingByCode.has(row.courseCode.trim().toLowerCase()));
+        const { data: insertedSubjects, error: subjectInsertError } = missingSubjects.length
+          ? await supabase.from('subjects').insert(missingSubjects.map((row) => ({ user_id: userData.user.id, term_id: termId, code: row.courseCode, name: row.courseCode, units: row.units }))).select('id, code')
+          : { data: [], error: null };
+        if (subjectInsertError) setError('Curriculum was saved, but we could not activate its subject workspaces.');
+        else {
+          for (const subject of insertedSubjects ?? []) existingByCode.set(subject.code.trim().toLowerCase(), subject.id);
+          const linkingResults = await Promise.all((curriculumItems ?? []).flatMap((item) => {
+            const subjectId = existingByCode.get(item.course_code.trim().toLowerCase());
+            return subjectId ? [supabase.from('curriculum_items').update({ subject_id: subjectId }).eq('id', item.id)] : [];
+          }));
+          const linkingError = linkingResults.find((result) => result.error)?.error;
+          if (linkingError) setError('Curriculum and subjects were saved, but their links could not be completed. Try importing again.');
+          else setSuccess(`Imported ${selectedRows.length} course${selectedRows.length === 1 ? '' : 's'} and activated their subject workspaces for ${termLabel}.`);
+        }
+      }
+    }
     setIsImporting(false);
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { decryptCredentials, encryptCredentials } from "../../../../../lib/integrations/credentials";
+import { gmailTaskFilters, gmailTaskListQuery, messageMatchesGmailTaskFilters } from "../../../../../lib/integrations/gmail-filters";
 import { formatRetryAfter, GoogleApiError, googleApi, googleErrorKind, googleErrorMessage, googleRetryAfter, refreshGoogleCredential, type GoogleCredential } from "../../../../../lib/integrations/google";
 import { createClient } from "../../../../../lib/supabase/server";
 
@@ -69,7 +70,7 @@ async function gmailMetadata(credentials: GoogleCredential, ids: string[]) {
       next += 1;
       if (index >= ids.length) return;
       try {
-        messages.push(await googleApi<GmailMessage>(credentials, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${ids[index]}?format=metadata&metadataHeaders=Subject`, "Gmail"));
+        messages.push(await googleApi<GmailMessage>(credentials, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${ids[index]}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`, "Gmail"));
       } catch (error) {
         failure = error;
       }
@@ -143,9 +144,10 @@ export async function POST() {
   const gmailWork = (async (): Promise<ServiceResult> => {
     if (!profile?.current_term_id) return { state: "degraded", imported: 0, message: "Select a current term before importing Gmail review tasks." };
     try {
-      const listing = await googleApi<{ messages?: Array<{ id: string }> }>(credentials, "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=is%3Aunread", "Gmail");
+      const filters = gmailTaskFilters((connection.settings as Record<string, unknown> | null)?.gmailTaskFilters);
+      const listing = await googleApi<{ messages?: Array<{ id: string }> }>(credentials, `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=25&q=${encodeURIComponent(gmailTaskListQuery())}`, "Gmail");
       const metadata = await gmailMetadata(credentials, (listing.messages ?? []).map((message) => message.id));
-      const tasks = metadata.messages.map((message) => ({
+      const tasks = metadata.messages.filter((message) => messageMatchesGmailTaskFilters(message, filters)).map((message) => ({
         user_id: user.id,
         source: "gmail",
         source_id: message.id,

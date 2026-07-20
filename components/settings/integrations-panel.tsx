@@ -5,6 +5,7 @@ import { useToast } from "../feedback/toast-provider";
 import { useRouter } from "next/navigation";
 import { CalendarDays, CheckCircle2, Cloud, Link2, RefreshCw, TriangleAlert } from "lucide-react";
 import { LocalDateTime } from "../format/local-date-time";
+import { gmailTaskFilters } from "../../lib/integrations/gmail-filters";
 
 type Notice = { kind: "error" | "success"; text: string } | null;
 type IntegrationConnection = {
@@ -58,6 +59,10 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
   const router = useRouter();
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
+  const initialGmailFilters = gmailTaskFilters(settingsRecord(initialGoogleConnection?.settings).gmailTaskFilters);
+  const [gmailTaskTriggers, setGmailTaskTriggers] = useState(initialGmailFilters.taskTriggers.join("\n"));
+  const [gmailExcludedPhrases, setGmailExcludedPhrases] = useState(initialGmailFilters.excludedPhrases.join("\n"));
+  const [savingGmailFilters, setSavingGmailFilters] = useState(false);
   const googleConnected = googleConnection?.status === "connected";
   const canvasConnected = canvasConnection?.status === "connected";
   const googleSync = googleSyncResult(googleConnection?.settings);
@@ -137,6 +142,37 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
     }
   }
 
+  function filterLines(value: string) {
+    return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  }
+
+  async function saveGmailFilters(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingGmailFilters(true);
+    const filters = { taskTriggers: filterLines(gmailTaskTriggers), excludedPhrases: filterLines(gmailExcludedPhrases) };
+    try {
+      const response = await fetch("/api/integrations/google/filters", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(filters),
+      });
+      const body = await responseBody(response);
+      if (!response.ok) {
+        updateNotice({ kind: "error", text: body.error ?? "Could not save Gmail task filters." });
+        return;
+      }
+      setGoogleConnection((current) => current ? {
+        ...current,
+        settings: { ...settingsRecord(current.settings), gmailTaskFilters: filters },
+      } : current);
+      updateNotice({ kind: "success", text: "Gmail task filters saved. They will apply on your next sync." });
+    } catch {
+      updateNotice({ kind: "error", text: "Gmail task filters could not be saved. Check your connection and try again." });
+    } finally {
+      setSavingGmailFilters(false);
+    }
+  }
+
   const canvasStatus = canvasConnected
     ? { label: "Connected", icon: CheckCircle2, className: "bg-[#e6f2f0] text-teal" }
     : canvasConnection?.status === "error"
@@ -180,6 +216,17 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
             {(!googleConnected || googleNeedsReconnect) && <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnection ? "Reconnect Google" : "Connect Google"}</a>}
             <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/25 px-4 py-2 font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !googleConnected} onClick={() => void syncGoogle()} type="button"><RefreshCw className="size-4" aria-hidden="true" />{busy ? "Syncing…" : googleRetrying ? "Retry Gmail" : "Sync now"}</button>
           </div>
+          <form className="mt-6 rounded-2xl border border-white/15 bg-white/5 p-4" onSubmit={(event) => void saveGmailFilters(event)}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div><h4 className="font-bold">Gmail task filters</h4><p className="mt-1 text-sm leading-6 text-[#d7ebe7]">Only unread inbox messages matching a trigger become tasks. Promotions, social, updates, spam, and trash are always skipped.</p></div>
+              <span className="text-xs font-bold text-[#c7e6dd]">Editable per account</span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-bold text-white">Task triggers <span className="font-normal text-[#d7ebe7]">(one phrase per line)</span><textarea className="mt-1.5 min-h-32 w-full rounded-xl border border-white/20 bg-[#073f42] px-3 py-2 text-sm text-white placeholder:text-[#b8d2cd] focus:border-[#c7e6dd]" disabled={savingGmailFilters || !googleConnected} onChange={(event) => setGmailTaskTriggers(event.target.value)} value={gmailTaskTriggers} /></label>
+              <label className="text-sm font-bold text-white">Never create a task when it contains <span className="font-normal text-[#d7ebe7]">(one phrase per line)</span><textarea className="mt-1.5 min-h-32 w-full rounded-xl border border-white/20 bg-[#073f42] px-3 py-2 text-sm text-white placeholder:text-[#b8d2cd] focus:border-[#c7e6dd]" disabled={savingGmailFilters || !googleConnected} onChange={(event) => setGmailExcludedPhrases(event.target.value)} value={gmailExcludedPhrases} /></label>
+            </div>
+            <button className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#073f42] transition hover:bg-[#dff0ec] disabled:cursor-not-allowed disabled:opacity-60" disabled={savingGmailFilters || !googleConnected} type="submit">{savingGmailFilters ? "Saving filters…" : "Save Gmail filters"}</button>
+          </form>
         </article>
 
         <article className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
