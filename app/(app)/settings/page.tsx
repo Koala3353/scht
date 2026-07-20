@@ -30,7 +30,7 @@ export default async function SettingsPage({
         .maybeSingle(),
       supabase
         .from("tasks")
-        .select("id, title, due_at")
+        .select("id, title, due_at, priority")
         .eq("user_id", user.id)
         .is("completed_at", null)
         .not("due_at", "is", null)

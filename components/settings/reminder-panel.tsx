@@ -4,8 +4,9 @@ import { useState, type FormEvent } from "react";
 import { BellRing, Clock3, MailCheck, Sparkles } from "lucide-react";
 import { useToast } from "../feedback/toast-provider";
 import { LocalDateTime, useHasHydrated } from "../format/local-date-time";
+import { PriorityBadge } from "../tasks/priority-visual";
 
-type Task = { id: string; title: string; due_at: string | null };
+type Task = { id: string; title: string; due_at: string | null; priority: "low" | "normal" | "high" };
 type Preference = {
   timezone: string;
   quiet_start: string | null;
@@ -169,7 +170,7 @@ export function ReminderPanel({
             {tasks.map((task) => (
               <li className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between" key={task.id}>
                 <div>
-                  <p className="font-bold text-ink">{task.title}</p>
+                  <div className="flex flex-wrap items-center gap-2"><p className="font-bold text-ink">{task.title}</p><PriorityBadge compact priority={task.priority} /></div>
                   <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-600"><Clock3 className="size-4" aria-hidden="true" />Due {task.due_at ? <LocalDateTime value={task.due_at} fallback="scheduled" /> : "unscheduled"}</p>
                 </div>
                 <button className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal px-4 py-2 text-sm font-bold text-white transition hover:bg-[#064c4e] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !enabled} onClick={() => void queue(task.id)} type="button">

@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 
 import type { CachedTask } from "@/lib/sync/types";
+import { PriorityBadge, prioritySelectClass } from "./priority-visual";
 
 export type TaskTerm = { id: string; label: string };
 export type TaskSubject = { id: string; termId: string; label: string };
@@ -120,8 +121,8 @@ export function TaskEditor({
         <select className="rounded-xl border border-slate-300 bg-white px-3 py-2" id="task-kind" onChange={(event) => update("kind", event.target.value as CachedTask["kind"])} value={draft.kind}><option value="school">School</option><option value="personal">Personal</option><option value="work">Work</option></select>
       </label>
       <label className="grid gap-1 text-sm font-bold text-ink" htmlFor="task-priority">
-        Priority
-        <select className="rounded-xl border border-slate-300 bg-white px-3 py-2" id="task-priority" onChange={(event) => update("priority", event.target.value as CachedTask["priority"])} value={draft.priority}><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select>
+        <span className="flex items-center justify-between gap-2">Priority <PriorityBadge compact priority={draft.priority} /></span>
+        <select aria-label="Priority" className={`rounded-xl border px-3 py-2 font-semibold transition-colors ${prioritySelectClass(draft.priority)}`} id="task-priority" onChange={(event) => update("priority", event.target.value as CachedTask["priority"])} value={draft.priority}><option value="high">High — do first</option><option value="normal">Normal — planned work</option><option value="low">Low — when time allows</option></select>
       </label>
       <label className="grid gap-1 text-sm font-bold text-ink" htmlFor="task-effort">
         Effort (minutes)

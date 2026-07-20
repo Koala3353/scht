@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useToast } from "../feedback/toast-provider";
+import { PriorityBadge } from "../tasks/priority-visual";
 import type { DeliveryEvent } from "./delivery-log";
 
 export type AdminUserSummary = {
@@ -31,7 +32,7 @@ type UserDiagnostics = {
     connectedDataOptIn: boolean;
   } | null;
   connections: Array<{ provider: string; status: string; lastSyncedAt: string | null; errorMessage: string | null }>;
-  tasks: Array<{ id: string; title: string; dueAt: string | null; completedAt: string | null; source: string; priority: string; updatedAt: string }>;
+  tasks: Array<{ id: string; title: string; dueAt: string | null; completedAt: string | null; source: string; priority: "low" | "normal" | "high"; updatedAt: string }>;
   subjects: Array<{ id: string; code: string; name: string; units: number; syllabusStatus: string }>;
   syncErrors: Array<{ id: string; source: string; message: string; createdAt: string }>;
   deliveries: DeliveryEvent[];
@@ -114,7 +115,7 @@ function UserDetail({ diagnostics, onCopy }: { diagnostics: UserDiagnostics; onC
     <div className="mt-5 grid gap-3 sm:grid-cols-2"><Info label="Current term" value={profile.currentTerm || "None selected"} /><Info label="Last Google sign-in" value={when(profile.lastSignInAt)} /><Info label="Academic scale" value={profile.academicScale.toUpperCase()} /><Info label="Connected-data AI" value={profile.connectedDataOptIn ? "Opted in" : "Off"} /></div>
     <div className="mt-4 flex flex-wrap gap-2"><button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-teal hover:text-teal" onClick={() => void onCopy(profile.id, "User ID")} type="button">Copy user ID</button>{profile.email ? <button className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-teal hover:text-teal" onClick={() => void onCopy(profile.email!, "Email")} type="button">Copy email</button> : null}</div>
     <DetailSection title="Connections"><div className="flex flex-wrap gap-2">{diagnostics.connections.length ? diagnostics.connections.map((connection) => <span className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${connection.status === "error" ? "bg-red-50 text-red-800" : connection.status === "connected" ? "bg-[#e6f2f0] text-teal" : "border border-slate-200 bg-white text-slate-950"}`} key={connection.provider}>{connection.provider} · {connection.status}{connection.lastSyncedAt ? ` · ${when(connection.lastSyncedAt)}` : ""}</span>) : <p className="text-sm text-slate-600">No provider connections.</p>}</div>{diagnostics.connections.filter((connection) => connection.errorMessage).map((connection) => <p className="mt-2 text-sm text-red-800" key={`${connection.provider}-error`}>{connection.provider}: {connection.errorMessage}</p>)}</DetailSection>
-    <DetailSection title="Recent tasks"><CompactTable columns={["Task", "Source", "Due", "State"]} rows={diagnostics.tasks.map((task) => [task.title, task.source, task.dueAt ? when(task.dueAt) : "No due date", task.completedAt ? "Completed" : "Open"])} empty="No tasks yet." /></DetailSection>
+    <DetailSection title="Recent tasks"><TaskTable tasks={diagnostics.tasks} /></DetailSection>
     <DetailSection title="Sync errors"><CompactTable columns={["Source", "Message", "Recorded"]} rows={diagnostics.syncErrors.map((error) => [error.source, error.message, when(error.createdAt)])} empty="No unresolved sync errors." /></DetailSection>
     <DetailSection title="Latest email activity"><CompactTable columns={["Message", "Status", "Time"]} rows={diagnostics.deliveries.map((delivery) => [delivery.kind, delivery.status, when(delivery.occurredAt)])} empty="No email delivery records yet." /></DetailSection>
   </div>;
@@ -122,4 +123,5 @@ function UserDetail({ diagnostics, onCopy }: { diagnostics: UserDiagnostics; onC
 
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-slate-200 bg-white p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 break-words text-sm font-bold text-slate-950">{value}</p></div>; }
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="mt-5 border-t border-slate-200 pt-5"><h4 className="text-sm font-extrabold text-slate-950">{title}</h4><div className="mt-3">{children}</div></section>; }
+function TaskTable({ tasks }: { tasks: UserDiagnostics["tasks"] }) { return tasks.length ? <div className="overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-xs"><thead className="text-slate-500"><tr>{["Task", "Priority", "Source", "Due", "State"].map((column) => <th className="pb-2 pr-3 font-extrabold" key={column}>{column}</th>)}</tr></thead><tbody className="divide-y divide-slate-200">{tasks.slice(0, 8).map((task) => <tr key={task.id}><td className="py-2 pr-3 font-semibold text-slate-800">{task.title}</td><td className="py-2 pr-3"><PriorityBadge compact priority={task.priority} /></td><td className="py-2 pr-3 text-slate-700">{task.source}</td><td className="py-2 pr-3 text-slate-700">{task.dueAt ? when(task.dueAt) : "No due date"}</td><td className="py-2 pr-3 text-slate-700">{task.completedAt ? "Completed" : "Open"}</td></tr>)}</tbody></table></div> : <p className="text-sm text-slate-600">No tasks yet.</p>; }
 function CompactTable({ columns, rows, empty }: { columns: string[]; rows: string[][]; empty: string }) { return rows.length ? <div className="overflow-x-auto"><table className="w-full min-w-[30rem] text-left text-xs"><thead className="text-slate-500"><tr>{columns.map((column) => <th className="pb-2 pr-3 font-extrabold" key={column}>{column}</th>)}</tr></thead><tbody className="divide-y divide-slate-200">{rows.slice(0, 8).map((row, index) => <tr key={`${row.join("-")}-${index}`}>{row.map((value, cell) => <td className="py-2 pr-3 text-slate-700" key={`${value}-${cell}`}>{value}</td>)}</tr>)}</tbody></table></div> : <p className="text-sm text-slate-600">{empty}</p>; }

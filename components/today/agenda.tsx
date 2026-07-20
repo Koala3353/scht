@@ -4,6 +4,7 @@ import { CheckCircle2, Clock3 } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
 import { useHasHydrated } from "../format/local-date-time";
+import { PriorityBadge } from "../tasks/priority-visual";
 
 interface AgendaProps {
   tasks: CachedTask[];
@@ -73,10 +74,7 @@ export function Agenda({ tasks, onComplete }: AgendaProps) {
             </time>
             <div className="min-w-0">
               <h3 className="font-bold text-ink">{task.title}</h3>
-              <p className="mt-1 text-sm text-slate-600">
-                {task.kind[0].toUpperCase() + task.kind.slice(1)}
-                {task.priority === "high" ? " · High priority" : ""}
-              </p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2"><p className="text-sm text-slate-600">{task.kind[0].toUpperCase() + task.kind.slice(1)}</p><PriorityBadge priority={task.priority} /></div>
               {highImpact && (
                 <span className="mt-2 inline-flex rounded-md bg-[#f7ebe3] px-2 py-1 text-xs font-bold text-action">
                   Grade impact · {task.weightPercent}%

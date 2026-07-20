@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { FilterX, ListFilter } from "lucide-react";
 
 import { TaskList } from "../tasks/task-list";
+import { PriorityBadge, prioritySelectClass } from "../tasks/priority-visual";
 import { sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "../tasks/task-editor";
 import { useTaskSyncWorkspace } from "../tasks/use-task-sync-workspace";
 import { WorkManager } from "../work/work-manager";
@@ -37,7 +38,7 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
     filterTasks: (cachedTasks) => cachedTasks.filter((task) => !task.subjectId || !hiddenSubjectIds.includes(task.subjectId)),
   });
   const [source, setSource] = useState("all");
-  const [priority, setPriority] = useState("all");
+  const [priority, setPriority] = useState<"all" | CachedTask["priority"]>("all");
   const [subject, setSubject] = useState("all");
   const [project, setProject] = useState("all");
   const [term, setTerm] = useState(focusedTaskId ? "all" : currentTermId ?? "all");
@@ -76,7 +77,7 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
         <label className="text-sm font-semibold text-ink">Source<select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-ink" value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All sources</option>{sources.map((value) => <option key={value} value={value}>{sourceLabel(value)}</option>)}</select></label>
         <label className="text-sm font-semibold text-ink">Subject<select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-ink" value={subject} onChange={(event) => setSubject(event.target.value)}><option value="all">All subjects</option>{subjects.filter((value) => term === "all" || value.termId === term).map((value) => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
         <label className="text-sm font-semibold text-ink">Project<select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-ink" value={project} onChange={(event) => setProject(event.target.value)}><option value="all">All projects</option>{projects.map((value) => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
-        <label className="text-sm font-semibold text-ink">Priority<select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-ink" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label>
+        <label className="text-sm font-semibold text-ink"><span className="flex items-center justify-between gap-2">Priority {priority !== "all" ? <PriorityBadge compact priority={priority} /> : null}</span><select className={`mt-1.5 w-full rounded-xl border px-3 py-2 font-semibold transition-colors ${priority === "all" ? "border-slate-300 bg-white text-ink" : prioritySelectClass(priority)}`} value={priority} onChange={(event) => setPriority(event.target.value as "all" | CachedTask["priority"])}><option value="all">All priorities</option><option value="high">High — do first</option><option value="normal">Normal — planned work</option><option value="low">Low — when time allows</option></select></label>
         <label className="text-sm font-semibold text-ink">Status<select className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-ink" value={status} onChange={(event) => setStatus(event.target.value)}><option value="open">Open</option><option value="completed">Completed</option><option value="all">All statuses</option></select></label>
       </div>
       {filtered && <button className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-teal hover:bg-[#e6f2f0]" type="button" onClick={clearFilters}><FilterX className="size-4" aria-hidden="true" />Clear filters</button>}

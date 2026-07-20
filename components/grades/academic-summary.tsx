@@ -6,6 +6,7 @@ import {
   type GradeCategory,
 } from "../../lib/grades/calculator";
 import type { TaskView } from "../../lib/sync/types";
+import { PriorityBadge } from "../tasks/priority-visual";
 
 type Subject = { id: string; code: string; name: string; units: number };
 type Category = GradeCategory & { subjectId: string };
@@ -131,7 +132,7 @@ export function AcademicSummary({
                           href={`/planner?task=${task.id}`}
                           key={task.id}
                         >
-                          {task.title}
+                          <span className="inline-flex flex-wrap items-center gap-2">{task.title}<PriorityBadge compact priority={task.priority} /></span>
                           {task.dueAt
                             ? ` · due ${new Date(task.dueAt).toLocaleDateString()}`
                             : ""}

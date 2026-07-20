@@ -1,6 +1,7 @@
 import { ArrowUpRight, Sparkles } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
+import { PriorityBadge } from "../tasks/priority-visual";
 
 export function chooseFocusTask(tasks: CachedTask[]) {
   return [...tasks].sort((first, second) =>
@@ -36,6 +37,7 @@ export function FocusCard({ task }: { task: CachedTask | null }) {
             <Sparkles className="size-4" aria-hidden="true" />
             Best next move
           </p>
+          <div className="mt-3"><PriorityBadge priority={task.priority} /></div>
           <h2 className="mt-5 max-w-xl text-2xl font-black tracking-[-0.025em] text-wrap-balance sm:text-3xl">
             {task.title}
           </h2>

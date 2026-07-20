@@ -7,6 +7,7 @@ import type { CachedTask } from "@/lib/sync/types";
 import { AssignmentPrompt } from "../ai/assignment-prompt";
 import { useHasHydrated } from "../format/local-date-time";
 import { TaskEditor, sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "./task-editor";
+import { PriorityBadge, priorityCardClass } from "./priority-visual";
 
 type TaskListProps = {
   tasks: CachedTask[];
@@ -66,7 +67,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
         // student's device. Render a stable label until hydration completes.
         const dueLabel = hydrated ? relativeDue(task.dueAt) : (task.dueAt ? "Scheduled" : "No deadline");
         return (
-          <li className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" key={task.id}>
+          <li className={`rounded-2xl border border-slate-200 p-4 shadow-sm transition-colors ${priorityCardClass(task.priority, Boolean(task.completedAt))}`} key={task.id}>
             {isEditing ? (
               <TaskEditor currentTermId={currentTermId} onCancel={() => setEditing(null)} onSave={async (nextTask, baseUpdatedAt) => { await onSave(nextTask, baseUpdatedAt); setEditing(null); }} projects={projects} subjects={subjects} task={task} terms={terms} />
             ) : (
@@ -89,7 +90,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
                   {task.description && <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-700">{task.description}</p>}
                   <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
                     <span className="rounded-md bg-slate-100 px-2 py-1 capitalize">{task.kind}</span>
-                    <span className="rounded-md bg-slate-100 px-2 py-1 capitalize">{task.priority} priority</span>
+                    <PriorityBadge priority={task.priority} />
                     {task.subjectId && subjectLabels.get(task.subjectId) && <span className="rounded-md bg-slate-100 px-2 py-1">{subjectLabels.get(task.subjectId)}</span>}
                     {task.projectId && projectLabels.get(task.projectId) && <span className="rounded-md bg-slate-100 px-2 py-1">{projectLabels.get(task.projectId)}</span>}
                     {task.effortMinutes && <span className="rounded-md bg-slate-100 px-2 py-1">{task.effortMinutes} min</span>}

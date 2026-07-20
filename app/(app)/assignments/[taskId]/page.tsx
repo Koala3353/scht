@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/workspace/page-header";
+import { PriorityBadge } from "@/components/tasks/priority-visual";
 import { requireUser } from "@/lib/auth/guards";
 import { sanitizeCanvasAssignmentHtml } from "@/lib/integrations/canvas-assignment-content";
 import { requireQuery } from "@/lib/queries/core-page-query-error";
@@ -38,6 +39,7 @@ export default async function AssignmentPage({ params }: AssignmentPageProps) {
       </PageHeader>
       {sourceUrl ? <a className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-teal px-4 py-2 text-sm font-bold text-teal hover:bg-[#e6f2f0]" href={sourceUrl} rel="noreferrer" target="_blank">Open in Canvas <ExternalLink aria-hidden="true" className="size-4" /></a> : null}
     </div>
+    <div className="mt-4"><PriorityBadge priority={assignment.priority} /></div>
     <section className="mt-7 rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-8">
       {html ? <div className="assignment-brief" dangerouslySetInnerHTML={{ __html: html }} /> : <p className="text-slate-700">Canvas did not include instructions for this assignment. Open it in Canvas for the original brief.</p>}
     </section>
