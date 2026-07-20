@@ -26,6 +26,14 @@ describe('TaskInputSchema', () => {
         dueAt: '2026-07-18T12:00:00.000Z',
       }).title,
     ).toBe('Quant set');
+    expect(
+      TaskInputSchema.parse({
+        title: 'Canvas assignment',
+        kind: 'school',
+        dueAt: '2026-07-18T12:00:00+00:00',
+        completedAt: '2026-07-18T12:05:00+00:00',
+      }).completedAt,
+    ).toBe('2026-07-18T12:05:00+00:00');
     expect(() =>
       TaskInputSchema.parse({
         title: 'Quant set',
