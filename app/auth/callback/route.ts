@@ -51,7 +51,20 @@ export async function GET(request: NextRequest) {
   // The session exchange has already authenticated `user.id`. Use the
   // server-only client for this access check so an RLS policy failure cannot
   // turn an existing owner profile into an invite-required response.
-  const adminSupabase = createAdminClient();
+  let adminSupabase: ReturnType<typeof createAdminClient>;
+  try {
+    adminSupabase = createAdminClient();
+  } catch {
+    logAdminAuthDiagnostic(isAdminPortalSignIn, 'profile-client-unavailable', {
+      serviceClientCreated: false,
+    });
+    await supabase.auth.signOut();
+    return redirectTo(
+      request,
+      authFailurePath('workspace-access-check-failed'),
+      isGoogleIntegration,
+    );
+  }
   const loadProfile = () =>
     adminSupabase
       .from('profiles')
@@ -67,7 +80,16 @@ export async function GET(request: NextRequest) {
     profileErrorMessage: profileError?.message ?? null,
   });
 
-  if (!profile && !profileError) {
+  if (profileError) {
+    await supabase.auth.signOut();
+    return redirectTo(
+      request,
+      authFailurePath('workspace-access-check-failed'),
+      isGoogleIntegration,
+    );
+  }
+
+  if (!profile) {
     const { error: inviteError } = await supabase.rpc(
       'accept_invite_for_current_user',
     );
@@ -90,7 +112,16 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (profileError || !profile) {
+  if (profileError) {
+    await supabase.auth.signOut();
+    return redirectTo(
+      request,
+      authFailurePath('workspace-access-check-failed'),
+      isGoogleIntegration,
+    );
+  }
+
+  if (!profile) {
     await supabase.auth.signOut();
     return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
   }

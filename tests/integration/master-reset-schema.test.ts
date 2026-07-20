@@ -74,6 +74,18 @@ describe("master reset schema contract", () => {
     expect(reset).toContain("create trigger on_auth_user_created");
   });
 
+  it("restores server-only service-role privileges after rebuilding public", () => {
+    expect(reset).toContain(
+      "grant all privileges on all tables in schema public to service_role;",
+    );
+    expect(reset).toContain(
+      "grant all privileges on all sequences in schema public to service_role;",
+    );
+    expect(reset).toContain(
+      "grant execute on all functions in schema public to service_role;",
+    );
+  });
+
   it("does not restore discarded data or plaintext provider credentials", () => {
     for (const forbidden of [
       "raw jsonb",

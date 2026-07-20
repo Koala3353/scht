@@ -20,9 +20,20 @@ describe("reset invite recovery contract", () => {
     expect(callback.indexOf(".from('profiles')")).toBeLessThan(
       callback.indexOf("accept_invite_for_current_user"),
     );
-    expect(callback).toContain("const adminSupabase = createAdminClient()");
+    expect(callback).toContain("adminSupabase = createAdminClient()");
     expect(callback).toContain("admin-auth-diagnostic");
-    expect(callback).toContain("if (!profile && !profileError)");
+    expect(callback).toContain("if (!profile)");
+    expect(callback).toContain("authFailurePath('workspace-access-check-failed')");
+  });
+
+  it("does not describe a failed server-side profile check as a missing invite", () => {
+    const profileErrorBranch = callback.slice(
+      callback.indexOf("if (profileError)"),
+      callback.indexOf("if (!profile)"),
+    );
+
+    expect(profileErrorBranch).toContain("workspace-access-check-failed");
+    expect(profileErrorBranch).not.toContain("invite-required");
   });
 
   it("provisions profiles only for the one-use owner bootstrap or a locked pending invite", () => {

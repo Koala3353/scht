@@ -611,4 +611,12 @@ with check (bucket_id = 'syllabi' and ((storage.foldername(name))[1] = auth.uid(
 create policy "users delete own syllabi" on storage.objects for delete to authenticated
 using (bucket_id = 'syllabi' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_owner_admin()));
 
+-- The server-only service-role key powers owner access checks, exports,
+-- integration sync, and reminder dispatch. Recreating `public` removes the
+-- normal project grants, so restore them explicitly; service_role still
+-- bypasses RLS and is never exposed to browsers.
+grant all privileges on all tables in schema public to service_role;
+grant all privileges on all sequences in schema public to service_role;
+grant execute on all functions in schema public to service_role;
+
 commit;

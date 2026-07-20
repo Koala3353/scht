@@ -29,6 +29,10 @@ The reset deliberately preserves `auth.users` but removes Scht profiles. Re-invi
 
 If execution fails, the outer transaction rolls back rather than leaving a partial public schema. Do not retry until the error is understood and the backup remains available.
 
+## Repairing server-role access on an existing reset
+
+If the app reports that it cannot verify workspace access after a reset, run `supabase/migrations/0014_restore_service_role_grants.sql` once in the same project's SQL Editor. The reset now includes those grants automatically; the small repair query is only for an already-reset project.
+
 ## Required environment values
 
 Set environment values in `.env.local` for local work and in the hosting provider for production. Do not commit their values:
