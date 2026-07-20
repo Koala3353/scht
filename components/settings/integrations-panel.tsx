@@ -17,6 +17,7 @@ type IntegrationConnection = {
 
 type ServiceResult = { state: "synced" | "degraded" | "needs_reauth"; imported: number; message: string };
 type GoogleSyncResult = { calendar: ServiceResult; gmail: ServiceResult };
+type CanvasCourse = { id: string; code: string; name: string; archived_at: string | null; canvas_course_id: string | null };
 
 function settingsRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -50,7 +51,7 @@ async function responseBody(response: Response) {
   };
 }
 
-export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnection }: { initialGoogleConnection: IntegrationConnection; initialCanvasConnection: IntegrationConnection }) {
+export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnection, canvasCourses = [] }: { initialGoogleConnection: IntegrationConnection; initialCanvasConnection: IntegrationConnection; canvasCourses?: CanvasCourse[] }) {
   const [canvasUrl, setCanvasUrl] = useState("");
   const [canvasToken, setCanvasToken] = useState("");
   const [googleConnection, setGoogleConnection] = useState(initialGoogleConnection);
@@ -102,6 +103,26 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
     } catch {
       if (action === "sync") setCanvasConnection((current) => current ? { ...current, status: "error", error_message: "Canvas could not be reached. Check your connection and try again." } : current);
       updateNotice({ kind: "error", text: "Canvas could not be reached. Check the URL and try again." });
+    } finally {
+      setBusy(false);
+      router.refresh();
+    }
+  }
+
+  async function setCanvasCourseVisibility(course: CanvasCourse, hidden: boolean) {
+    setBusy(true);
+    updateNotice(null);
+    try {
+      const response = await fetch("/api/subjects/visibility", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ subjectId: course.id, hidden }),
+      });
+      const body = await responseBody(response);
+      if (!response.ok) throw new Error(body.error ?? "Could not update this course's visibility.");
+      updateNotice({ kind: "success", text: hidden ? `${course.code} is hidden from your active workspace.` : `${course.code} is visible in your active workspace again.` });
+    } catch (error) {
+      updateNotice({ kind: "error", text: error instanceof Error ? error.message : "Could not update this course's visibility." });
     } finally {
       setBusy(false);
       router.refresh();
@@ -239,6 +260,7 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
             <label className="text-sm font-bold text-ink">Personal API token{canvasConnection ? " (enter only to replace)" : ""}<input autoCapitalize="none" autoComplete="off" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" maxLength={4096} onChange={(event) => setCanvasToken(event.target.value)} required spellCheck={false} type="password" value={canvasToken} /></label>
             <div className="flex flex-wrap gap-3 md:col-span-2"><button className="inline-flex min-h-11 items-center justify-center rounded-xl bg-action px-4 py-2 font-bold text-white transition hover:bg-[#8d3909] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy} type="submit">{canvasConnection ? "Reconnect Canvas" : "Connect Canvas"}</button><button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !canvasConnected} onClick={() => void canvas("sync")} type="button"><RefreshCw className="size-4" aria-hidden="true" />Sync assignments</button></div>
           </form>
+          {canvasCourses.length > 0 && <section className="mt-6 border-t border-slate-200 pt-5" aria-labelledby="canvas-course-visibility"><div className="flex flex-wrap items-baseline justify-between gap-2"><div><h4 className="font-bold text-ink" id="canvas-course-visibility">Canvas course visibility</h4><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Hide old or irrelevant courses without deleting their grade history. Hidden Canvas courses and their tasks stay out of your active pages and future syncs.</p></div><span className="text-xs font-bold text-slate-500">Restorable anytime</span></div><ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200">{canvasCourses.map((course) => { const hidden = Boolean(course.archived_at); return <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3" key={course.id}><div><p className="font-bold text-ink">{course.code} <span className="font-normal text-slate-600">· {course.name}</span></p><p className={hidden ? "mt-1 text-xs font-bold text-slate-500" : "mt-1 text-xs font-bold text-teal"}>{hidden ? "Hidden from active pages" : "Visible in active pages"}</p></div><button className="inline-flex min-h-10 items-center justify-center rounded-lg border border-teal px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60" disabled={busy} onClick={() => void setCanvasCourseVisibility(course, !hidden)} type="button">{hidden ? "Show course" : "Hide course"}</button></li>; })}</ul></section>}
         </article>
       </div>
       {notice && <p className={"mt-4 rounded-xl px-4 py-3 text-sm font-semibold " + (notice.kind === "error" ? "bg-red-50 text-red-800" : "bg-[#e6f2f0] text-teal")} role={notice.kind === "error" ? "alert" : "status"}>{notice.text}</p>}

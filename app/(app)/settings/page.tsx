@@ -38,7 +38,7 @@ export default async function SettingsPage({
         .limit(10),
       supabase
         .from("profiles")
-        .select("academic_scale, ai_connected_data_opt_in")
+      .select("academic_scale, ai_connected_data_opt_in, current_term_id")
         .eq("id", user.id)
         .maybeSingle(),
       supabase
@@ -50,6 +50,15 @@ export default async function SettingsPage({
 
   const googleConnection = connections?.find((connection) => connection.provider === "google") ?? null;
   const canvasConnection = connections?.find((connection) => connection.provider === "canvas") ?? null;
+  const { data: canvasCourses } = profile?.current_term_id
+    ? await supabase
+        .from("subjects")
+        .select("id, code, name, archived_at, canvas_course_id")
+        .eq("user_id", user.id)
+        .eq("term_id", profile.current_term_id)
+        .not("canvas_course_id", "is", null)
+        .order("code")
+    : { data: [] };
 
   return (
     <main className="pb-8">
@@ -75,7 +84,7 @@ export default async function SettingsPage({
               Google could not connect. Confirm your Google test-user access, Google provider credentials, and the Supabase sign-in callback, then try again.
             </p>
           )}
-          <IntegrationsPanel initialCanvasConnection={canvasConnection} initialGoogleConnection={googleConnection} />
+          <IntegrationsPanel canvasCourses={canvasCourses ?? []} initialCanvasConnection={canvasConnection} initialGoogleConnection={googleConnection} />
           <AiVaultPanel connectedDataOptIn={profile?.ai_connected_data_opt_in === true} />
           <AcademicScalePanel
             academicScale={profile?.academic_scale === "gpa" ? "gpa" : "qpi"}

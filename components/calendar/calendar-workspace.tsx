@@ -15,6 +15,7 @@ type CalendarWorkspaceProps = {
   terms: TaskTerm[];
   subjects: TaskSubject[];
   projects: TaskProject[];
+  hiddenSubjectIds?: string[];
   approvedCategoryLabelsBySubject: Record<string, string[]>;
   timezone: string;
   range: { from: string; to: string };
@@ -28,6 +29,7 @@ export function CalendarWorkspace({
   terms,
   subjects,
   projects,
+  hiddenSubjectIds = [],
   approvedCategoryLabelsBySubject,
   timezone,
   range,
@@ -38,7 +40,8 @@ export function CalendarWorkspace({
     filterTasks: (cachedTasks) => cachedTasks.filter((task) => task.dueAt
       && task.dueAt >= range.from
       && task.dueAt < range.to
-      && (!currentTermId || task.termId === currentTermId)),
+      && (!currentTermId || task.termId === currentTermId)
+      && (!task.subjectId || !hiddenSubjectIds.includes(task.subjectId))),
   });
   const entries = calendarEntries(tasks, events);
   const groups = new Map<string, CalendarEntry[]>();

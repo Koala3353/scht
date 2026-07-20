@@ -31,7 +31,7 @@ export default async function TodayPage() {
       .select("id, name, academic_year")
       .eq("user_id", user.id)
       .order("starts_on"),
-    supabase.from("subjects").select("id, term_id, code, name").eq("user_id", user.id),
+    supabase.from("subjects").select("id, term_id, code, name, archived_at").eq("user_id", user.id),
     supabase
       .from("projects")
       .select("id, name, status")
@@ -45,7 +45,9 @@ export default async function TodayPage() {
   ]);
   const tasks = requireQuery(tasksResult, "today tasks") ?? [];
   const terms = requireQuery(termsResult, "today terms") ?? [];
-  const subjects = requireQuery(subjectsResult, "today subjects") ?? [];
+  const allSubjects = requireQuery(subjectsResult, "today subjects") ?? [];
+  const subjects = allSubjects.filter((subject) => !subject.archived_at);
+  const hiddenSubjectIds = new Set(allSubjects.filter((subject) => subject.archived_at).map((subject) => subject.id));
   const projects = requireQuery(projectsResult, "today projects") ?? [];
   const connections = requireQuery(connectionsResult, "today connections") ?? [];
   const savedProviders: Provider[] = connections.flatMap(
@@ -56,7 +58,8 @@ export default async function TodayPage() {
 
   return (
     <TodayWorkspace
-      initialTasks={(tasks as TaskRow[]).map(toCachedTask)}
+      hiddenSubjectIds={[...hiddenSubjectIds]}
+      initialTasks={(tasks as TaskRow[]).filter((task) => !task.subject_id || !hiddenSubjectIds.has(task.subject_id)).map(toCachedTask)}
       headerAction={<ProviderResync providers={savedProviders} />}
       projects={projects.map((project) => ({
         id: project.id,

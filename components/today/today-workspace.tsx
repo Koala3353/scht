@@ -25,6 +25,7 @@ interface TodayWorkspaceProps {
   terms?: TaskTerm[];
   subjects?: TaskSubject[];
   projects?: TaskProject[];
+  hiddenSubjectIds?: string[];
   headerAction?: ReactNode;
 }
 
@@ -49,8 +50,10 @@ export function TodayWorkspace({
   terms = [],
   subjects = [],
   projects = [],
+  hiddenSubjectIds = [],
   headerAction,
 }: TodayWorkspaceProps) {
+  const hiddenSubjectIdSet = useMemo(() => new Set(hiddenSubjectIds), [hiddenSubjectIds]);
   function newManualTask(): CachedTask {
     const now = new Date().toISOString();
     return {
@@ -88,7 +91,7 @@ export function TodayWorkspace({
 
   async function refreshTasks() {
     const cachedTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
-    const visibleTasks = selectedTermId ? cachedTasks.filter((task) => task.termId === selectedTermId) : cachedTasks;
+    const visibleTasks = cachedTasks.filter((task) => (!selectedTermId || task.termId === selectedTermId) && (!task.subjectId || !hiddenSubjectIdSet.has(task.subjectId)));
     setTasks(visibleTasks);
     return visibleTasks;
   }

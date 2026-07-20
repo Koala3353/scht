@@ -106,7 +106,7 @@ export async function POST(request: Request) {
     const courses = await canvasApi<CanvasCourse[]>(credentials.baseUrl, credentials.token, "/courses?enrollment_state=active&per_page=100");
     const { data: existingSubjects, error: existingSubjectError } = await supabase
       .from("subjects")
-      .select("id, code, canvas_course_id")
+      .select("id, code, canvas_course_id, archived_at")
       .eq("user_id", user.id)
       .eq("term_id", profile.current_term_id);
     if (existingSubjectError) throw new Error("Could not inspect existing subjects before Canvas sync.");
@@ -125,6 +125,9 @@ export async function POST(request: Request) {
       const canvasCourseId = String(course.id);
       const existingCanvasSubject = byCanvasCourseId.get(canvasCourseId);
       if (existingCanvasSubject) {
+        // An archived Canvas course is deliberately kept for history, but it
+        // must never recreate its assignments in the active workspace.
+        if (existingCanvasSubject.archived_at) return [];
         matchedSubjects.push({ id: existingCanvasSubject.id, canvas_course_id: canvasCourseId });
         return [];
       }

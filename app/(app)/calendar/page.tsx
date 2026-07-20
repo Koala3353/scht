@@ -59,18 +59,21 @@ export default async function CalendarPage({
       .gte("starts_at", range.from.toISOString())
       .lt("starts_at", range.to.toISOString())
       .order("starts_at"),
-    supabase.from("subjects").select("id, term_id, code, name").eq("user_id", user.id),
+    supabase.from("subjects").select("id, term_id, code, name, archived_at").eq("user_id", user.id),
     supabase.from("academic_terms").select("id, name, academic_year").eq("user_id", user.id).order("starts_on"),
     supabase.from("projects").select("id, name, status").eq("user_id", user.id).order("created_at"),
     supabase.from("grade_categories").select("subject_id, name").eq("user_id", user.id),
   ]);
   const tasks = requireQuery(tasksResult, "calendar tasks") ?? [];
   const events = requireQuery(eventsResult, "calendar events") ?? [];
-  const subjects = requireQuery(subjectsResult, "calendar task subjects") ?? [];
+  const allSubjects = requireQuery(subjectsResult, "calendar task subjects") ?? [];
+  const subjects = allSubjects.filter((subject) => !subject.archived_at);
+  const hiddenSubjectIds = new Set(allSubjects.filter((subject) => subject.archived_at).map((subject) => subject.id));
   const terms = requireQuery(termsResult, "calendar task terms") ?? [];
   const projects = requireQuery(projectsResult, "calendar task projects") ?? [];
   const categories = requireQuery(categoriesResult, "calendar task grade categories") ?? [];
   const currentTermTasks = (tasks as TaskRow[])
+    .filter((task) => !task.subject_id || !hiddenSubjectIds.has(task.subject_id))
     .map(toCachedTask)
     .filter((task) => !profile?.current_term_id || task.termId === profile.current_term_id);
 
@@ -91,6 +94,7 @@ export default async function CalendarPage({
           return labels;
         }, {})}
         currentTermId={profile?.current_term_id ?? null}
+        hiddenSubjectIds={[...hiddenSubjectIds]}
         events={events.flatMap((event) => event.starts_at ? [{ id: event.id, title: event.title, startsAt: event.starts_at, eventUrl: event.event_url, provider: event.provider, isAllDay: event.is_all_day }] : [])}
         initialTasks={currentTermTasks}
         projects={projects.map((project) => ({ id: project.id, label: project.name, status: project.status as "active" | "archived" }))}

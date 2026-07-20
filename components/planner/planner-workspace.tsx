@@ -18,6 +18,7 @@ type PlannerWorkspaceProps = {
   terms: TaskTerm[];
   subjects: TaskSubject[];
   projects: TaskProject[];
+  hiddenSubjectIds?: string[];
   focusedTaskId?: string | null;
   approvedCategoryLabelsBySubject?: Record<string, string[]>;
 };
@@ -30,7 +31,7 @@ type SaveFailure = {
   canonicalTask?: TaskView;
 };
 
-export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, terms, subjects, projects, focusedTaskId = null, approvedCategoryLabelsBySubject = {} }: PlannerWorkspaceProps) {
+export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, terms, subjects, projects, hiddenSubjectIds = [], focusedTaskId = null, approvedCategoryLabelsBySubject = {} }: PlannerWorkspaceProps) {
   const { tasks, setTasks, saveTask: saveLocalTask, retrySynchronization, syncState } = useTaskSyncWorkspace({
     userId,
     initialTasks,
@@ -38,6 +39,7 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
     // Planner's server result is paged by the provider and may not be a full
     // account snapshot; never prune a durable cache row from that projection.
     pruneMissingSnapshot: false,
+    filterTasks: (cachedTasks) => cachedTasks.filter((task) => !task.subjectId || !hiddenSubjectIds.includes(task.subjectId)),
   });
   const [source, setSource] = useState("all");
   const [priority, setPriority] = useState("all");

@@ -6,6 +6,7 @@ import { TaskEditor, type TaskProject, type TaskSubject, type TaskTerm } from "@
 import { buildAiTaskPrompt } from "@/lib/ai/proposals";
 import type { CachedTask } from "@/lib/sync/types";
 import { AssignmentPrompt } from "./assignment-prompt";
+import { ContextChat } from "./context-chat";
 
 type Proposal = {
   id: string;
@@ -29,9 +30,10 @@ type AiWorkbenchProps = {
   subjects: TaskSubject[];
   projects: TaskProject[];
   approvedCategoryLabelsBySubject?: Record<string, string[]>;
+  connectedDataOptIn: boolean;
 };
 
-export function AiWorkbench({ userId, currentTermId, terms, subjects, projects, approvedCategoryLabelsBySubject = {} }: AiWorkbenchProps) {
+export function AiWorkbench({ userId, currentTermId, terms, subjects, projects, approvedCategoryLabelsBySubject = {}, connectedDataOptIn }: AiWorkbenchProps) {
   const { toast } = useToast();
   const [provider, setProvider] = useState<"openai" | "hackclub">("openai");
   const [apiKey, setApiKey] = useState(() => {
@@ -80,7 +82,7 @@ export function AiWorkbench({ userId, currentTermId, terms, subjects, projects, 
 
   const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
 
-  return <section className="mt-6 max-w-3xl rounded-2xl border border-teal/20 bg-white p-5 shadow-sm">
+  return <div className="mt-6 max-w-3xl space-y-6"><ContextChat connectedDataOptIn={connectedDataOptIn} /><section className="rounded-2xl border border-teal/20 bg-white p-5 shadow-sm">
     <form className="space-y-3" onSubmit={propose}>
       <label className="block text-sm font-semibold">Provider<select className="mt-1 w-full rounded-xl border border-slate-300 px-3" onChange={(event) => chooseProvider(event.target.value as "openai" | "hackclub")} value={provider}><option value="openai">OpenAI</option><option value="hackclub">Hack Club AI</option></select></label>
       <label className="block text-sm font-semibold">Unlocked API key<input autoCapitalize="none" autoComplete="off" autoCorrect="off" className="mt-1 w-full rounded-xl border border-slate-300 px-3" maxLength={512} onChange={(event) => setApiKey(event.target.value)} required spellCheck={false} type="password" value={apiKey} /></label>
@@ -90,5 +92,5 @@ export function AiWorkbench({ userId, currentTermId, terms, subjects, projects, 
     </form>
     {proposal.length > 0 && <div className="mt-5"><h2 className="font-bold">Review and edit before applying</h2><div className="mt-3 space-y-3">{proposal.map((item) => <div className="rounded-xl border border-slate-200 p-3" key={item.id}><AssignmentPrompt approvedCategoryLabels={item.subjectId ? (approvedCategoryLabelsBySubject[item.subjectId] ?? []) : []} subjectLabel={item.subjectId ? (subjectLabels.get(item.subjectId) ?? "Not assigned") : "Not assigned"} task={asCachedTask(item)} /><TaskEditor currentTermId={currentTermId} onSave={(nextTask) => setProposal((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, ...nextTask, id: candidate.id } : candidate))} projects={projects} subjects={subjects} submitLabel="Save draft" task={asCachedTask(item)} terms={terms} /></div>)}</div><button className="mt-4 rounded-xl border border-teal px-4 py-2 font-bold text-teal disabled:opacity-60" disabled={busy} onClick={() => void apply()} type="button">Apply reviewed tasks</button></div>}
     {notice && <p className="mt-4 text-sm text-teal" role="status">{notice}</p>}
-  </section>;
+  </section></div>;
 }

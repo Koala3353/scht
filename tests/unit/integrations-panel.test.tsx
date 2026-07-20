@@ -8,8 +8,8 @@ afterEach(cleanup);
 import { IntegrationsPanel } from "../../components/settings/integrations-panel";
 import { ToastProvider } from "../../components/feedback/toast-provider";
 
-function renderPanel(google: Parameters<typeof IntegrationsPanel>[0]["initialGoogleConnection"], canvas: Parameters<typeof IntegrationsPanel>[0]["initialCanvasConnection"] = null) {
-  return render(<ToastProvider><IntegrationsPanel initialCanvasConnection={canvas} initialGoogleConnection={google} /></ToastProvider>);
+function renderPanel(google: Parameters<typeof IntegrationsPanel>[0]["initialGoogleConnection"], canvas: Parameters<typeof IntegrationsPanel>[0]["initialCanvasConnection"] = null, canvasCourses: Parameters<typeof IntegrationsPanel>[0]["canvasCourses"] = []) {
+  return render(<ToastProvider><IntegrationsPanel canvasCourses={canvasCourses} initialCanvasConnection={canvas} initialGoogleConnection={google} /></ToastProvider>);
 }
 
 describe("IntegrationsPanel", () => {
@@ -66,5 +66,16 @@ describe("IntegrationsPanel", () => {
     expect((screen.getByLabelText(/Task triggers/) as HTMLTextAreaElement).value).toBe("assignment");
     expect((screen.getByLabelText(/Never create a task/) as HTMLTextAreaElement).value).toBe("sale");
     expect((screen.getByLabelText("Promotions") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("lets a student hide a stale Canvas course without deleting it", () => {
+    renderPanel(null, { status: "connected", last_synced_at: null, error_message: null, settings: { baseUrl: "https://canvas.example.edu" } }, [
+      { id: "course-1", code: "OLD 101", name: "Previous semester course", archived_at: null, canvas_course_id: "42" },
+      { id: "course-2", code: "CURR 201", name: "Current course", archived_at: "2026-07-20T00:00:00.000Z", canvas_course_id: "43" },
+    ]);
+
+    expect(screen.getByRole("heading", { name: "Canvas course visibility" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide course" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show course" })).toBeTruthy();
   });
 });

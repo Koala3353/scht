@@ -21,7 +21,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       .select(taskColumns)
       .eq("user_id", user.id)
       .order("due_at", { ascending: true, nullsFirst: false }),
-    supabase.from("subjects").select("id, term_id, code, name").eq("user_id", user.id),
+    supabase.from("subjects").select("id, term_id, code, name, archived_at").eq("user_id", user.id),
     supabase
       .from("academic_terms")
       .select("id, name, academic_year")
@@ -52,7 +52,9 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
   ]);
   const profile = requireQuery(profileResult, "tasks profile");
   const tasks = requireQuery(tasksResult, "tasks") ?? [];
-  const subjects = requireQuery(subjectsResult, "task subjects") ?? [];
+  const allSubjects = requireQuery(subjectsResult, "task subjects") ?? [];
+  const subjects = allSubjects.filter((subject) => !subject.archived_at);
+  const hiddenSubjectIds = new Set(allSubjects.filter((subject) => subject.archived_at).map((subject) => subject.id));
   const terms = requireQuery(termsResult, "task terms") ?? [];
   const projects = requireQuery(projectsResult, "task projects") ?? [];
   const categories = requireQuery(categoriesResult, "task grade categories") ?? [];
@@ -63,7 +65,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       ? [connection.provider]
       : [],
   );
-  const plannerTasks = mergeFocusedTask(tasks as TaskRow[], focusedTask as TaskRow | null);
+  const plannerTasks = mergeFocusedTask(tasks as TaskRow[], focusedTask as TaskRow | null)
+    .filter((task) => !task.subject_id || !hiddenSubjectIds.has(task.subject_id));
 
   return (
     <main>
@@ -76,6 +79,7 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       <PlannerWorkspace
         currentTermId={profile?.current_term_id ?? null}
         focusedTaskId={selectedTaskId}
+        hiddenSubjectIds={[...hiddenSubjectIds]}
         userId={user.id}
         projects={projects.map((project) => ({
           id: project.id,
