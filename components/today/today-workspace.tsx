@@ -339,7 +339,7 @@ export function TodayWorkspace({
 
   return (
     <main className="pb-8">
-      <header className="flex flex-col gap-5 border-b border-slate-200 pb-7 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-5 border-b border-slate-200 pb-7 xl:flex-row xl:items-end xl:justify-between">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold text-teal">Today</p>
           <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] text-wrap-balance sm:text-4xl">
@@ -350,28 +350,30 @@ export function TodayWorkspace({
             attention now.
           </p>
         </div>
-        {headerAction}
-        <p
-          aria-live="polite"
-          className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm font-bold ${syncTone(syncState)}`}
-        >
-          <Cloud className="size-4" aria-hidden="true" />
-          {syncState}
-        </p>
-        {syncState === "Sync failed" && (
-          <button
-            className="inline-flex min-h-11 w-fit items-center justify-center rounded-xl border border-action px-4 py-2 text-sm font-bold text-action transition hover:bg-[#f7ebe3]"
-            onClick={() => void retrySynchronization()}
-            type="button"
+        <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+          {headerAction}
+          <p
+            aria-live="polite"
+            className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm font-bold ${syncTone(syncState)}`}
           >
-            Retry sync
-          </button>
-        )}
-        {syncState === "Needs review" && (
-          <p className="text-sm font-semibold text-action">
-            A task changed elsewhere. Review and edit it from its latest server version before syncing again.
+            <Cloud className="size-4" aria-hidden="true" />
+            {syncState}
           </p>
-        )}
+          {syncState === "Sync failed" && (
+            <button
+              className="inline-flex min-h-11 w-fit items-center justify-center rounded-xl border border-action px-4 py-2 text-sm font-bold text-action transition hover:bg-[#f7ebe3]"
+              onClick={() => void retrySynchronization()}
+              type="button"
+            >
+              Retry sync
+            </button>
+          )}
+          {syncState === "Needs review" && (
+            <p className="basis-full text-sm font-semibold text-action xl:text-right">
+              A task changed elsewhere. Review and edit it from its latest server version before syncing again.
+            </p>
+          )}
+        </div>
       </header>
 
       {tasks.filter((task) => task.syncState === 'conflict' || task.syncState === 'rejected').map((task) => (
@@ -482,15 +484,15 @@ export function TodayWorkspace({
         </div>
       )}
 
-      <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,.8fr)]">
+      <div className="mt-7 space-y-5">
         <FocusCard task={focusTask} />
-        <aside className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <p className="text-sm font-semibold text-teal">Quick capture</p>
-          <h2 className="mt-2 text-xl font-black tracking-tight">
-            Keep the small things visible.
-          </h2>
+        <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-2 border-b border-slate-100 pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div><p className="text-sm font-semibold text-teal">Quick capture</p><h2 className="mt-2 text-xl font-black tracking-tight">Keep the small things visible.</h2></div>
+            <p className="max-w-xl text-sm leading-6 text-slate-600">Capture the task now; add context only when it helps.</p>
+          </div>
           <div className="mt-5">
-            <TaskEditor baseUpdatedAt={null} currentTermId={selectedTermId} defaultToCurrentTerm key={quickCaptureTask.id} onSave={saveQuickCapture} projects={projects} subjects={subjects} task={quickCaptureTask} terms={terms} />
+            <TaskEditor baseUpdatedAt={null} currentTermId={selectedTermId} defaultToCurrentTerm embedded key={quickCaptureTask.id} onSave={saveQuickCapture} projects={projects} subjects={subjects} task={quickCaptureTask} terms={terms} />
           </div>
           <div className="mt-6 border-t border-slate-100 pt-5">
             <p className="flex items-center gap-2 text-sm font-bold text-ink">
@@ -504,10 +506,10 @@ export function TodayWorkspace({
               See all open tasks <ArrowRight className="size-4" />
             </a>
           </div>
-        </aside>
+        </section>
       </div>
 
-      <section className="mt-9 max-w-4xl">
+      <section className="mt-9">
         <div className="mb-5 flex items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-teal">Agenda</p>

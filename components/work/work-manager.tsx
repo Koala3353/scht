@@ -52,7 +52,7 @@ export function WorkManager({ initialProjects, tasks, onSaveTask }: { initialPro
   }
 
   const activeProjects = projects.filter((project) => project.status === "active");
-  return <section className="mx-auto mt-6 grid max-w-5xl gap-6 px-4 sm:px-0 lg:grid-cols-[1fr_.9fr]">
+  return <section className="mx-auto mt-6 grid max-w-5xl gap-6 px-4 sm:px-0 lg:grid-cols-[1fr_.9fr] lg:items-start">
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-teal">Projects</p><h2 className="mt-1 text-xl font-black">Keep work in context.</h2></div><FolderPlus className="size-5 text-teal" aria-hidden="true" /></div>
       <form className="mt-5 flex gap-2" onSubmit={create}><label className="sr-only" htmlFor="project-name">Project name</label><input className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-ink" id="project-name" maxLength={120} onChange={(event) => setName(event.target.value)} placeholder="e.g. Org recruitment" required value={name} /><button className="min-h-11 rounded-xl bg-teal px-4 font-bold text-white disabled:opacity-60" disabled={busy} type="submit">Add</button></form>

@@ -62,7 +62,7 @@ export default async function SettingsPage({
           Each service remains separate, transparent, and under your control.
         </PageHeader>
       </div>
-      <div className="mt-8 max-w-6xl">
+      <div className="mt-8 max-w-7xl">
         <SettingsNavigation />
         <div className="mt-8 space-y-10">
           {integration === "google-connected" && (

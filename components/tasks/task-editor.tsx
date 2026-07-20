@@ -21,6 +21,8 @@ export type TaskEditorProps = {
   onSave: (task: CachedTask, baseUpdatedAt: string | null) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+  /** Use inside an existing surface such as Today quick capture. */
+  embedded?: boolean;
 };
 
 function asLocalDateTime(value: string | null | undefined) {
@@ -45,6 +47,7 @@ export function TaskEditor({
   onSave,
   onCancel,
   submitLabel = "Save task",
+  embedded = false,
 }: TaskEditorProps) {
   const [draft, setDraft] = useState(task);
   const [usesCurrentTermDefault, setUsesCurrentTermDefault] = useState(
@@ -88,7 +91,7 @@ export function TaskEditor({
   }
 
   return (
-    <form className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 sm:p-5" onSubmit={submit}>
+    <form className={`grid gap-4 sm:grid-cols-2 ${embedded ? "" : "rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"}`} onSubmit={submit}>
       {task.source !== "manual" && (
         <p className="sm:col-span-2 text-sm font-semibold text-slate-600">Imported from {sourceLabel(task.source)}. Source identity is read-only.</p>
       )}
