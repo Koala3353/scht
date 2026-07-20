@@ -35,19 +35,20 @@ export async function PUT(request: Request) {
     excludedPhrases: [...new Set(parsed.data.excludedPhrases.map((entry) => entry.toLowerCase()))],
     includedCategories: parsed.data.includedCategories,
   };
-  const { data: connection, error: connectionError } = await supabase
+  const { data: connections, error: connectionError } = await supabase
     .from("integration_connections")
     .select("id, settings")
     .eq("user_id", user.id)
-    .eq("provider", "google")
-    .maybeSingle();
-  if (connectionError || !connection) return NextResponse.json({ error: "Connect Google before saving Gmail task filters." }, { status: 400 });
+    .eq("provider", "google");
+  if (connectionError || !connections?.length) return NextResponse.json({ error: "Connect Google before saving Gmail task filters." }, { status: 400 });
 
-  const { error } = await supabase
-    .from("integration_connections")
-    .update({ settings: connectionSettings(connection.settings, filters) })
-    .eq("id", connection.id);
-  return error
+  const updates = await Promise.all(connections.map((connection) =>
+    supabase
+      .from("integration_connections")
+      .update({ settings: connectionSettings(connection.settings, filters) })
+      .eq("id", connection.id),
+  ));
+  return updates.some((result) => result.error)
     ? NextResponse.json({ error: "Could not save Gmail task filters." }, { status: 502 })
-    : NextResponse.json({ filters });
+    : NextResponse.json({ filters, accountsUpdated: connections.length });
 }

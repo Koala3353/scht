@@ -229,6 +229,8 @@ create table public.integration_connections (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
   provider text not null check (provider in ('google', 'canvas')),
+  account_key text not null default 'legacy' check (char_length(btrim(account_key)) between 1 and 320),
+  account_email text check (account_email is null or char_length(btrim(account_email)) between 3 and 320),
   status text not null default 'disconnected' check (status in ('connected', 'disconnected', 'error')),
   encrypted_credentials bytea,
   settings jsonb not null default '{}'::jsonb check (jsonb_typeof(settings) = 'object'),
@@ -236,7 +238,7 @@ create table public.integration_connections (
   error_message text check (error_message is null or char_length(error_message) <= 1000),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
-  unique (user_id, provider)
+  unique (user_id, provider, account_key)
 );
 
 create table public.encrypted_ai_vaults (

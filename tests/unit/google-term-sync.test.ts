@@ -36,7 +36,7 @@ describe("Google sync", () => {
     const profileQuery = { eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: { current_term_id: termId }, error: null })) })) };
     const connectionQuery = { eq: vi.fn() };
     connectionQuery.eq.mockReturnValue(connectionQuery);
-    Object.assign(connectionQuery, { maybeSingle: vi.fn(async () => ({ data: { id: "connection-1", encrypted_credentials: "dGVzdA==" }, error: null })) });
+    Object.assign(connectionQuery, { then: (resolve: (value: { data: Array<{ id: string; account_email: string | null; encrypted_credentials: string; settings: Record<string, never> }>; error: null }) => unknown) => Promise.resolve({ data: [{ id: "connection-1", account_email: null, encrypted_credentials: "dGVzdA==", settings: {} }], error: null }).then(resolve) });
     const connectionUpdate = { eq: vi.fn(async () => ({ error: null })) };
     mocks.createClient.mockResolvedValue({
       auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },

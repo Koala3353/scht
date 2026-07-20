@@ -8,21 +8,21 @@ afterEach(cleanup);
 import { IntegrationsPanel } from "../../components/settings/integrations-panel";
 import { ToastProvider } from "../../components/feedback/toast-provider";
 
-function renderPanel(google: Parameters<typeof IntegrationsPanel>[0]["initialGoogleConnection"], canvas: Parameters<typeof IntegrationsPanel>[0]["initialCanvasConnection"] = null, canvasCourses: Parameters<typeof IntegrationsPanel>[0]["canvasCourses"] = []) {
-  return render(<ToastProvider><IntegrationsPanel canvasCourses={canvasCourses} initialCanvasConnection={canvas} initialGoogleConnection={google} /></ToastProvider>);
+function renderPanel(google: Parameters<typeof IntegrationsPanel>[0]["initialGoogleConnections"], canvas: Parameters<typeof IntegrationsPanel>[0]["initialCanvasConnection"] = null, canvasCourses: Parameters<typeof IntegrationsPanel>[0]["canvasCourses"] = []) {
+  return render(<ToastProvider><IntegrationsPanel canvasCourses={canvasCourses} initialCanvasConnection={canvas} initialGoogleConnections={google} /></ToastProvider>);
 }
 
 describe("IntegrationsPanel", () => {
   it("shows the actual saved Google connection instead of a static connect state", () => {
-    renderPanel({ status: "connected", last_synced_at: "2026-07-19T08:00:00.000Z", error_message: null });
+    renderPanel([{ status: "connected", last_synced_at: "2026-07-19T08:00:00.000Z", error_message: null }]);
 
-    expect(screen.getByText("Connected")).toBeTruthy();
+    expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Reconnect Google" })).toBeNull();
     expect((screen.getByRole("button", { name: "Sync now" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("keeps sync unavailable until a credential has been saved", () => {
-    renderPanel(null);
+    renderPanel([]);
 
     expect(screen.getAllByText("Not connected")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Connect Google" })).toBeTruthy();
@@ -30,7 +30,7 @@ describe("IntegrationsPanel", () => {
   });
 
   it("keeps a saved Canvas connection visible without exposing its token", () => {
-    renderPanel(null, { status: "connected", last_synced_at: "2026-07-19T08:00:00.000Z", error_message: null, settings: { baseUrl: "https://canvas.example.edu" } });
+    renderPanel([], { status: "connected", last_synced_at: "2026-07-19T08:00:00.000Z", error_message: null, settings: { baseUrl: "https://canvas.example.edu" } });
 
     expect(screen.getByText(/Connected securely to canvas\.example\.edu./)).toBeTruthy();
     expect((screen.getByRole("button", { name: "Sync assignments" }) as HTMLButtonElement).disabled).toBe(false);
@@ -38,7 +38,7 @@ describe("IntegrationsPanel", () => {
   });
 
   it("keeps Google sync available and renders one provider result for a degraded Gmail refresh", () => {
-    renderPanel({
+    renderPanel([{
       status: "connected",
       last_synced_at: "2026-07-19T08:00:00.000Z",
       error_message: null,
@@ -48,7 +48,7 @@ describe("IntegrationsPanel", () => {
           gmail: { state: "degraded", imported: 0, message: "Gmail is temporarily rate-limited. Your Calendar update is safe; try Gmail again after 2 minutes." },
         },
       },
-    });
+    }]);
 
     expect((screen.getByRole("button", { name: "Retry Gmail" }) as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getAllByText(/Gmail is temporarily rate-limited/)).toHaveLength(1);
@@ -56,12 +56,12 @@ describe("IntegrationsPanel", () => {
   });
 
   it("loads saved Gmail task filters for editing", () => {
-    renderPanel({
+    renderPanel([{
       status: "connected",
       last_synced_at: null,
       error_message: null,
       settings: { gmailTaskFilters: { taskTriggers: ["assignment"], excludedPhrases: ["sale"], includedCategories: { promotions: true, social: false, updates: false } } },
-    });
+    }]);
 
     expect((screen.getByLabelText(/Task triggers/) as HTMLTextAreaElement).value).toBe("assignment");
     expect((screen.getByLabelText(/Never create a task/) as HTMLTextAreaElement).value).toBe("sale");
@@ -69,7 +69,7 @@ describe("IntegrationsPanel", () => {
   });
 
   it("lets a student hide a stale Canvas course without deleting it", () => {
-    renderPanel(null, { status: "connected", last_synced_at: null, error_message: null, settings: { baseUrl: "https://canvas.example.edu" } }, [
+    renderPanel([], { status: "connected", last_synced_at: null, error_message: null, settings: { baseUrl: "https://canvas.example.edu" } }, [
       { id: "course-1", code: "OLD 101", name: "Previous semester course", archived_at: null, canvas_course_id: "42" },
       { id: "course-2", code: "CURR 201", name: "Current course", archived_at: "2026-07-20T00:00:00.000Z", canvas_course_id: "43" },
     ]);
@@ -77,5 +77,16 @@ describe("IntegrationsPanel", () => {
     expect(screen.getByRole("heading", { name: "Canvas course visibility" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Hide course" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Show course" })).toBeTruthy();
+  });
+
+  it("lists every linked Google account and offers another connection", () => {
+    renderPanel([
+      { id: "google-1", account_email: "student@example.com", status: "connected", last_synced_at: null, error_message: null },
+      { id: "google-2", account_email: "school@example.edu", status: "error", last_synced_at: null, error_message: "Reconnect required." },
+    ]);
+
+    expect(screen.getByText("student@example.com")).toBeTruthy();
+    expect(screen.getByText("school@example.edu")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Add Google account" })).toBeTruthy();
   });
 });

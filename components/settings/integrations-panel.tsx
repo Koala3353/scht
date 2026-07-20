@@ -9,11 +9,14 @@ import { gmailTaskFilters } from "../../lib/integrations/gmail-filters";
 
 type Notice = { kind: "error" | "success"; text: string } | null;
 type IntegrationConnection = {
+  id?: string;
+  account_key?: string;
+  account_email?: string | null;
   status: string;
   last_synced_at: string | null;
   error_message: string | null;
   settings?: unknown;
-} | null;
+};
 
 type ServiceResult = { state: "synced" | "degraded" | "needs_reauth"; imported: number; message: string };
 type GoogleSyncResult = { calendar: ServiceResult; gmail: ServiceResult };
@@ -49,27 +52,29 @@ async function responseBody(response: Response) {
     needsReconnect?: boolean;
     calendar?: ServiceResult;
     gmail?: ServiceResult;
+    accounts?: Array<GoogleSyncResult & { accountEmail?: string | null }>;
   };
 }
 
-export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnection, canvasCourses = [] }: { initialGoogleConnection: IntegrationConnection; initialCanvasConnection: IntegrationConnection; canvasCourses?: CanvasCourse[] }) {
+export function IntegrationsPanel({ initialGoogleConnections, initialCanvasConnection, canvasCourses = [] }: { initialGoogleConnections: IntegrationConnection[]; initialCanvasConnection: IntegrationConnection | null; canvasCourses?: CanvasCourse[] }) {
   const [canvasUrl, setCanvasUrl] = useState("");
   const [canvasToken, setCanvasToken] = useState("");
-  const [googleConnection, setGoogleConnection] = useState(initialGoogleConnection);
+  const [googleConnections, setGoogleConnections] = useState(initialGoogleConnections);
+  const googleConnection = googleConnections[0] ?? null;
   const [canvasConnection, setCanvasConnection] = useState(initialCanvasConnection);
   const { toast } = useToast();
   const router = useRouter();
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
-  const initialGmailFilters = gmailTaskFilters(settingsRecord(initialGoogleConnection?.settings).gmailTaskFilters);
+  const initialGmailFilters = gmailTaskFilters(settingsRecord(googleConnection?.settings).gmailTaskFilters);
   const [gmailTaskTriggers, setGmailTaskTriggers] = useState(initialGmailFilters.taskTriggers.join("\n"));
   const [gmailExcludedPhrases, setGmailExcludedPhrases] = useState(initialGmailFilters.excludedPhrases.join("\n"));
   const [gmailIncludedCategories, setGmailIncludedCategories] = useState(initialGmailFilters.includedCategories);
   const [savingGmailFilters, setSavingGmailFilters] = useState(false);
-  const googleConnected = googleConnection?.status === "connected";
+  const googleConnected = googleConnections.some((connection) => connection.status === "connected");
   const canvasConnected = canvasConnection?.status === "connected";
   const googleSync = googleSyncResult(googleConnection?.settings);
-  const googleNeedsReconnect = googleConnection?.status === "error" || googleSync?.calendar.state === "needs_reauth" || googleSync?.gmail.state === "needs_reauth";
+  const googleNeedsReconnect = googleConnections.some((connection) => connection.status === "error") || googleSync?.calendar.state === "needs_reauth" || googleSync?.gmail.state === "needs_reauth";
   const googleRetrying = googleSync?.calendar.state === "degraded" || googleSync?.gmail.state === "degraded";
   const configuredCanvasBaseUrl = settingsRecord(canvasConnection?.settings).baseUrl;
   const canvasBaseUrl = typeof configuredCanvasBaseUrl === "string" ? configuredCanvasBaseUrl : null;
@@ -140,25 +145,30 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
       const response = await fetch("/api/integrations/google/sync", { method: "POST" });
       const body = await responseBody(response);
       if (!response.ok) {
-        setGoogleConnection((current) => current ? { ...current, status: "error", error_message: body.error ?? "Google sync failed." } : current);
+        setGoogleConnections((current) => current.map((connection) => ({ ...connection, status: "error", error_message: body.error ?? "Google sync failed." })));
         return;
       }
       if (!body.calendar || !body.gmail) {
-        setGoogleConnection((current) => current ? { ...current, status: "error", error_message: "Google returned an incomplete sync result." } : current);
+        setGoogleConnections((current) => current.map((connection) => ({ ...connection, status: "error", error_message: "Google returned an incomplete sync result." })));
         return;
       }
       const result: GoogleSyncResult = { calendar: body.calendar, gmail: body.gmail };
-      const needsReauth = result.calendar.state === "needs_reauth" || result.gmail.state === "needs_reauth";
-      const fullySynced = result.calendar.state === "synced" && result.gmail.state === "synced";
-      setGoogleConnection((current) => ({
-        ...current,
-        status: needsReauth ? "error" : "connected",
-        last_synced_at: fullySynced ? new Date().toISOString() : current?.last_synced_at ?? null,
-        error_message: needsReauth ? (result.calendar.state === "needs_reauth" ? result.calendar.message : result.gmail.message) : null,
-        settings: { ...settingsRecord(current?.settings), sync: result },
+      const accountResults = new Map((body.accounts ?? []).map((account) => [account.accountEmail?.toLowerCase() ?? "", account]));
+      setGoogleConnections((current) => current.map((connection) => {
+        const account = accountResults.get(connection.account_email?.toLowerCase() ?? "");
+        const accountResult = account ? { calendar: account.calendar, gmail: account.gmail } : result;
+        const accountNeedsReauth = accountResult.calendar.state === "needs_reauth" || accountResult.gmail.state === "needs_reauth";
+        const accountFullySynced = accountResult.calendar.state === "synced" && accountResult.gmail.state === "synced";
+        return {
+          ...connection,
+          status: accountNeedsReauth ? "error" : "connected",
+          last_synced_at: accountFullySynced ? new Date().toISOString() : connection.last_synced_at,
+          error_message: accountNeedsReauth ? (accountResult.calendar.state === "needs_reauth" ? accountResult.calendar.message : accountResult.gmail.message) : null,
+          settings: { ...settingsRecord(connection.settings), sync: accountResult },
+        };
       }));
     } catch {
-      setGoogleConnection((current) => current ? { ...current, status: "error", error_message: "Google could not be reached. Check your connection and try again." } : current);
+      setGoogleConnections((current) => current.map((connection) => ({ ...connection, status: "error", error_message: "Google could not be reached. Check your connection and try again." })));
     } finally {
       setBusy(false);
       router.refresh();
@@ -184,10 +194,7 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
         updateNotice({ kind: "error", text: body.error ?? "Could not save Gmail task filters." });
         return;
       }
-      setGoogleConnection((current) => current ? {
-        ...current,
-        settings: { ...settingsRecord(current.settings), gmailTaskFilters: filters },
-      } : current);
+      setGoogleConnections((current) => current.map((connection) => ({ ...connection, settings: { ...settingsRecord(connection.settings), gmailTaskFilters: filters } })));
       updateNotice({ kind: "success", text: "Gmail task filters saved. They will apply on your next sync." });
     } catch {
       updateNotice({ kind: "error", text: "Gmail task filters could not be saved. Check your connection and try again." });
@@ -233,16 +240,18 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
               ? "Google is linked. Sync whenever you want to refresh upcoming Calendar events and unread Gmail review tasks."
               : "Pull upcoming events into Calendar and unread message subjects into reviewable planner tasks when you choose to sync."}
           </p>
+          {googleConnections.length > 0 ? <ul className="mt-4 divide-y divide-white/15 rounded-xl border border-white/15 bg-white/5 px-3"><li className="py-2 text-xs font-bold uppercase tracking-wide text-[#c7e6dd]">Linked Google accounts</li>{googleConnections.map((connection, index) => <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm" key={connection.id ?? connection.account_key ?? index}><span className="font-semibold text-white">{connection.account_email || `Google account ${index + 1}`}</span><span className={connection.status === "connected" ? "text-[#c7e6dd]" : "text-[#f3b68b]"}>{connection.status === "connected" ? "Connected" : "Needs reconnect"}</span></li>)}</ul> : null}
           {(googleConnection?.last_synced_at || googleSync) && <p className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold leading-6 text-[#d7ebe7]" role={googleNeedsReconnect ? "alert" : "status"}>{googleConnection?.last_synced_at ? <>Last successful sync <LocalDateTime value={googleConnection.last_synced_at} />. </> : null}{googleSync ? <>Calendar: {googleSync.calendar.message} Gmail: {googleSync.gmail.message}</> : "Google sync complete."}</p>}
           {googleConnection?.status === "error" && googleConnection.error_message && !googleSync && <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]" role="alert">{googleConnection.error_message}</p>}
           <div className="mt-7 flex flex-wrap gap-3">
-            {(!googleConnected || googleNeedsReconnect) && <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnection ? "Reconnect Google" : "Connect Google"}</a>}
+            <a className="inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 font-bold text-[#073f42] transition hover:bg-[#dff0ec]" href="/api/integrations/google/start">{googleConnections.length ? "Add Google account" : "Connect Google"}</a>
+            {googleNeedsReconnect ? <a className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/25 px-4 py-2 font-bold text-white transition hover:bg-white/10" href="/api/integrations/google/start">Reconnect Google account</a> : null}
             <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/25 px-4 py-2 font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" disabled={busy || !googleConnected} onClick={() => void syncGoogle()} type="button"><RefreshCw className="size-4" aria-hidden="true" />{busy ? "Syncing…" : googleRetrying ? "Retry Gmail" : "Sync now"}</button>
           </div>
           <form className="mt-6 rounded-2xl border border-white/15 bg-white/5 p-4" onSubmit={(event) => void saveGmailFilters(event)}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div><h4 className="font-bold">Gmail task filters</h4><p className="mt-1 text-sm leading-6 text-[#d7ebe7]">Only unread inbox messages matching a trigger become tasks. Choose whether Promotions, Social, or Updates can qualify; spam and trash are always skipped.</p></div>
-              <span className="text-xs font-bold text-[#c7e6dd]">Editable per account</span>
+              <span className="text-xs font-bold text-[#c7e6dd]">Applies to every linked account</span>
             </div>
             <div className="mt-4 grid gap-4 xl:grid-cols-2">
               <label className="text-sm font-bold text-white">Task triggers <span className="font-normal text-[#d7ebe7]">(one phrase per line)</span><textarea className="mt-1.5 min-h-36 w-full rounded-xl border border-white/20 bg-[#073f42] px-3 py-2 text-sm text-white placeholder:text-[#b8d2cd] focus:border-[#c7e6dd]" disabled={savingGmailFilters || !googleConnected} onChange={(event) => setGmailTaskTriggers(event.target.value)} value={gmailTaskTriggers} /></label>

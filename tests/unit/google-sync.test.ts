@@ -40,10 +40,10 @@ function query(result: { data?: unknown; error?: unknown }) {
   return chain;
 }
 
-function setupSupabase() {
+function setupSupabase(connectionRows = [{ id: "connection-1", account_email: "student@example.com", encrypted_credentials: "dGVzdA==", settings: { scopes: ["calendar.readonly", "gmail.readonly"] } }]) {
   const calendar = query({ data: null, error: null });
   const tasks = query({ data: null, error: null });
-  const connection = query({ data: { id: "connection-1", encrypted_credentials: "dGVzdA==", settings: { scopes: ["calendar.readonly", "gmail.readonly"] } }, error: null });
+  const connection = query({ data: connectionRows, error: null });
   const profile = query({ data: { current_term_id: termId }, error: null });
   mocks.createClient.mockResolvedValue({
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },
@@ -143,6 +143,29 @@ describe("Google sync", () => {
     expect(result.status).toBe(200);
     expect(body).toMatchObject({ gmail: { state: "synced", imported: 1 } });
     expect(tasks.upsert).toHaveBeenCalledWith(expect.any(Array), { onConflict: "user_id,source,source_id", ignoreDuplicates: true });
+  });
+
+  it("syncs every linked Google account with account-scoped provider IDs", async () => {
+    const { calendar, tasks } = setupSupabase([
+      { id: "connection-1", account_email: "student@example.com", encrypted_credentials: "dGVzdA==", settings: {} },
+      { id: "connection-2", account_email: "school@example.edu", encrypted_credentials: "dGVzdA==", settings: {} },
+    ]);
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.includes("calendar")) return Promise.resolve(response({ items: [{ id: "event-1", summary: "Seminar", start: { dateTime: "2026-07-20T09:00:00Z" } }] }));
+      if (url.includes("messages?")) return Promise.resolve(response({ messages: [{ id: "gmail-1" }] }));
+      return Promise.resolve(response({ id: "gmail-1", snippet: "Follow up", payload: { headers: [{ name: "Subject", value: "Assignment review" }] } }));
+    }));
+
+    const result = await POST();
+    const body = await result.json();
+
+    expect(result.status).toBe(200);
+    expect(body.accounts).toHaveLength(2);
+    expect(body.calendar).toMatchObject({ state: "synced", imported: 2 });
+    expect(calendar.upsert.mock.calls.flatMap(([events]) => (events as Array<{ source_id: string }>).map((event) => event.source_id)))
+      .toEqual(expect.arrayContaining(["connection-1:event-1", "connection-2:event-1"]));
+    expect(tasks.upsert.mock.calls.flatMap(([tasks]) => (tasks as Array<{ source_id: string }>).map((task) => task.source_id)))
+      .toEqual(expect.arrayContaining(["connection-1:gmail-1", "connection-2:gmail-1"]));
   });
 
   it("keeps the connection retryable when token refresh is rate-limited", async () => {

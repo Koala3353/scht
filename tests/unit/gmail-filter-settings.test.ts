@@ -15,9 +15,9 @@ function connectionQuery(settings: unknown) {
   };
   chain.eq.mockReturnValue(chain);
   chain.select.mockReturnValue(chain);
-  chain.maybeSingle.mockResolvedValue({ data: { id: "google-connection", settings }, error: null });
+  const result = { data: [{ id: "google-connection", settings }], error: null };
   chain.update.mockReturnValue(chain);
-  Object.assign(chain, { then: (resolve: (value: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve) });
+  Object.assign(chain, { then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve) });
   return chain;
 }
 
