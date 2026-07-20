@@ -187,7 +187,9 @@ export async function POST(request: Request) {
         due_at: assignment.due_at,
         priority: "normal",
         weight_percent: null,
-        notes: assignment.description?.slice(0, 20_000) ?? null,
+        // Task editing and the direct-save API share a 5,000 character limit.
+        // Keep imported Canvas assignments within that same durable contract.
+        notes: assignment.description?.slice(0, 5_000) ?? null,
         links: assignment.html_url ? [assignment.html_url] : [],
       }));
       if (!tasks.length) return 0;

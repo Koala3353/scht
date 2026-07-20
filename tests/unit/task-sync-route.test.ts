@@ -142,4 +142,23 @@ describe('POST /api/sync/tasks', () => {
     });
     expect(updateChain.eq).not.toHaveBeenCalledWith('updated_at', updatedAt);
   });
+
+  it('repairs oversized legacy Canvas descriptions while completing the task', async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: { id: userId } }, error: null });
+    const updateChain = { eq: vi.fn(), select: vi.fn() };
+    updateChain.eq.mockReturnValue(updateChain);
+    updateChain.select.mockReturnValue({ maybeSingle: mocks.updateMaybeSingle });
+    mocks.update.mockReturnValue(updateChain);
+    mocks.updateMaybeSingle.mockResolvedValue({ data: row, error: null });
+    mocks.from.mockReturnValueOnce({ update: mocks.update });
+    const legacyDescription = 'x'.repeat(5_001);
+
+    const response = await POST(request([mutation({
+      baseUpdatedAt: updatedAt,
+      payload: { ...mutation().payload, source: 'canvas', description: legacyDescription, completedAt: '2026-07-20T12:00:00.000Z' },
+    })]));
+
+    expect(await response.json()).toEqual({ accepted: [expect.objectContaining({ id: 'mutation-1' })], rejected: [] });
+    expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ notes: legacyDescription.slice(0, 5_000) }));
+  });
 });

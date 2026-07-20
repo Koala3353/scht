@@ -13,6 +13,16 @@ type IncomingMutation = {
   baseUpdatedAt: unknown;
 };
 
+function normalizeImportedCanvasTask(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const candidate = payload as Record<string, unknown>;
+  // Existing Canvas rows from before the import limit may carry a longer
+  // description back during a completion update. Preserve the task action and
+  // repair that stale imported text on the same server-authoritative save.
+  if (candidate.source !== 'canvas' || typeof candidate.description !== 'string') return payload;
+  return { ...candidate, description: candidate.description.slice(0, 5_000) };
+}
+
 function rejection(
   id: unknown,
   reason: string,
@@ -94,7 +104,7 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const parsedTask = TaskInputSchema.safeParse(mutation.payload);
+    const parsedTask = TaskInputSchema.safeParse(normalizeImportedCanvasTask(mutation.payload));
     if (!parsedTask.success) {
       response.rejected.push(rejection(mutation.id, parsedTask.error.issues[0]?.message ?? 'Invalid task.'));
       continue;
