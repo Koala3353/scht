@@ -164,6 +164,16 @@ create table public.tasks (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table public.canvas_assignment_details (
+  task_id uuid primary key references public.tasks (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  canvas_html text not null check (char_length(canvas_html) <= 250000),
+  source_url text check (source_url is null or char_length(source_url) <= 2048),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+create index canvas_assignment_details_user_id_idx on public.canvas_assignment_details (user_id);
+
 create table public.syllabi (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
@@ -501,6 +511,7 @@ create trigger subjects_set_updated_at before update on public.subjects for each
 create trigger curriculum_items_set_updated_at before update on public.curriculum_items for each row execute function public.set_updated_at();
 create trigger projects_set_updated_at before update on public.projects for each row execute function public.set_updated_at();
 create trigger tasks_set_updated_at before update on public.tasks for each row execute function public.set_updated_at();
+create trigger canvas_assignment_details_set_updated_at before update on public.canvas_assignment_details for each row execute function public.set_updated_at();
 create trigger calendar_events_set_updated_at before update on public.calendar_events for each row execute function public.set_updated_at();
 create trigger integration_connections_set_updated_at before update on public.integration_connections for each row execute function public.set_updated_at();
 create trigger encrypted_ai_vaults_set_updated_at before update on public.encrypted_ai_vaults for each row execute function public.set_updated_at();
@@ -522,6 +533,7 @@ alter table public.academic_terms enable row level security;
 alter table public.subjects enable row level security;
 alter table public.curriculum_items enable row level security;
 alter table public.tasks enable row level security;
+alter table public.canvas_assignment_details enable row level security;
 alter table public.projects enable row level security;
 alter table public.syllabi enable row level security;
 alter table public.grade_categories enable row level security;
@@ -544,6 +556,7 @@ create policy "users manage own academic terms" on public.academic_terms for all
 create policy "users manage own subjects" on public.subjects for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());
 create policy "users manage own curriculum items" on public.curriculum_items for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());
 create policy "users manage own tasks" on public.tasks for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());
+create policy "users manage own canvas assignment details" on public.canvas_assignment_details for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());
 create policy "users manage own projects" on public.projects for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());
 create policy "users manage own syllabi" on public.syllabi for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());
 create policy "users manage own grade categories" on public.grade_categories for all using (auth.uid() = user_id or public.is_owner_admin()) with check (auth.uid() = user_id or public.is_owner_admin());

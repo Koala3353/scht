@@ -23,3 +23,14 @@ html { scroll-behavior:smooth; }
 @keyframes landing-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-10px); } }
 @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } .landing-float { animation:none; } .landing-hero *, .landing-hero *::before, .landing-hero *::after { transition-duration:.01ms !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; } }
 @media (max-width:640px) { .landing-orbit-one { width:26rem; height:26rem; right:-15rem; top:11rem; } .landing-orbit-two { display:none; } }
+.assignment-brief { color:#27364d; font-size:1rem; line-height:1.75; overflow-wrap:anywhere; }
+.assignment-brief > :first-child { margin-top:0; }
+.assignment-brief p, .assignment-brief ul, .assignment-brief ol, .assignment-brief blockquote, .assignment-brief table { margin:1.1rem 0; }
+.assignment-brief h1, .assignment-brief h2, .assignment-brief h3, .assignment-brief h4, .assignment-brief h5, .assignment-brief h6 { color:var(--ink); font-weight:800; line-height:1.25; margin:1.7rem 0 .7rem; }
+.assignment-brief h1 { font-size:1.65rem; } .assignment-brief h2 { font-size:1.4rem; } .assignment-brief h3 { font-size:1.2rem; }
+.assignment-brief ul, .assignment-brief ol { padding-left:1.4rem; } .assignment-brief ul { list-style:disc; } .assignment-brief ol { list-style:decimal; }
+.assignment-brief li + li { margin-top:.45rem; }
+.assignment-brief a { color:var(--teal); font-weight:700; text-decoration:underline; text-underline-offset:3px; }
+.assignment-brief table { border-collapse:collapse; display:block; max-width:100%; overflow-x:auto; }
+.assignment-brief th, .assignment-brief td { border:1px solid #cbd5e1; min-width:10rem; padding:.7rem; text-align:left; vertical-align:top; }
+.assignment-brief th { background:#e6f2f0; color:#075e60; font-weight:800; }

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   subjectsInsert: vi.fn(),
   tasksUpdate: vi.fn(),
   tasksUpsert: vi.fn(),
+  assignmentDetailsUpsert: vi.fn(),
 }));
 
 vi.mock("../../lib/supabase/server", () => ({ createClient: mocks.createClient }));
@@ -50,6 +51,13 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
   const tasksTable = {
     upsert: mocks.tasksUpsert.mockImplementation(() => existingSourceIds.length ? ignoredDuplicateMutation : mutation(errorAt === "tasks")),
     update: mocks.tasksUpdate.mockImplementation(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ in: vi.fn(() => ({ is: vi.fn(async () => ({ error: null })) })) })) })) })),
+    select: vi.fn(() => ({
+      eq: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          in: vi.fn(async () => ({ data: [{ id: "saved", source_id: "42:1" }], error: null })),
+        })),
+      })),
+    })),
   };
   mocks.createClient.mockResolvedValue({
     auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },
@@ -65,6 +73,9 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
         update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn(async () => ({ data: { id: "saved", canvas_course_id: "42" }, error: null })) })) })) })),
       };
       if (table === "tasks") return tasksTable;
+      if (table === "canvas_assignment_details") return {
+        upsert: mocks.assignmentDetailsUpsert.mockResolvedValue({ error: null }),
+      };
       throw new Error(`Unexpected table ${table}`);
     }),
   });

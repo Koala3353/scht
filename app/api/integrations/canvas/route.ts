@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { decryptCredentials, encryptCredentials } from "../../../../lib/integrations/credentials";
 import { canvasApi, type CanvasAssignment, type CanvasCourse } from "../../../../lib/integrations/canvas";
+import { canvasAssignmentHtmlForStorage } from "../../../../lib/integrations/canvas-assignment-content";
 import { normalizeCanvasBaseUrl, validCanvasToken } from "../../../../lib/validation/canvas-input";
 import { createClient } from "../../../../lib/supabase/server";
 
@@ -201,6 +202,33 @@ export async function POST(request: Request) {
         .upsert(tasks, { onConflict: "user_id,source,source_id", ignoreDuplicates: true })
         .select("id");
       if (taskError) throw new Error("Could not save Canvas assignments.");
+      const sourceIds = tasks.map((task) => task.source_id);
+      const { data: persistedTasks, error: persistedTaskError } = await supabase
+        .from("tasks")
+        .select("id, source_id")
+        .eq("user_id", user.id)
+        .eq("source", "canvas")
+        .in("source_id", sourceIds);
+      if (persistedTaskError) throw new Error("Could not match Canvas assignment details.");
+      const taskIdBySourceId = new Map((persistedTasks ?? []).map((task) => [task.source_id, task.id]));
+      const details = assignments
+        .filter((assignment) => !assignmentIsFinished(assignment) && assignment.description?.trim())
+        .flatMap((assignment) => {
+          const sourceId = `${subject.canvas_course_id}:${assignment.id}`;
+          const taskId = taskIdBySourceId.get(sourceId);
+          return taskId ? [{
+            task_id: taskId,
+            user_id: user.id,
+            canvas_html: canvasAssignmentHtmlForStorage(assignment.description),
+            source_url: assignment.html_url ?? null,
+          }] : [];
+        });
+      if (details.length) {
+        const { error: detailError } = await supabase
+          .from("canvas_assignment_details")
+          .upsert(details, { onConflict: "task_id" });
+        if (detailError) throw new Error("Could not save the full Canvas assignment brief.");
+      }
       return savedTasks?.length ?? 0;
     });
     const { error: updateError } = await supabase
