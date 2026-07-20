@@ -7,6 +7,11 @@ const phrase = z.string().trim().min(1).max(120);
 const filtersSchema = z.object({
   taskTriggers: z.array(phrase).min(1).max(30),
   excludedPhrases: z.array(phrase).max(30),
+  includedCategories: z.object({
+    promotions: z.boolean(),
+    social: z.boolean(),
+    updates: z.boolean(),
+  }).strict(),
 }).strict();
 
 function connectionSettings(value: unknown, filters: z.infer<typeof filtersSchema>) {
@@ -28,6 +33,7 @@ export async function PUT(request: Request) {
   const filters = {
     taskTriggers: [...new Set(parsed.data.taskTriggers.map((entry) => entry.toLowerCase()))],
     excludedPhrases: [...new Set(parsed.data.excludedPhrases.map((entry) => entry.toLowerCase()))],
+    includedCategories: parsed.data.includedCategories,
   };
   const { data: connection, error: connectionError } = await supabase
     .from("integration_connections")

@@ -11,7 +11,7 @@ export type ServiceResult = { state: ServiceState; imported: number; message: st
 export type GoogleSyncResult = { calendar: ServiceResult; gmail: ServiceResult };
 
 type CalendarEvent = { id: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string };
-type GmailMessage = { id: string; snippet?: string; payload?: { headers?: Array<{ name: string; value: string }> } };
+type GmailMessage = { id: string; snippet?: string; labelIds?: string[]; payload?: { headers?: Array<{ name: string; value: string }> } };
 const googleCredentialSchema = z.object({
   accessToken: z.string().min(1),
   refreshToken: z.string().min(1).optional(),

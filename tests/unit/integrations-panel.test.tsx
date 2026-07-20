@@ -60,10 +60,11 @@ describe("IntegrationsPanel", () => {
       status: "connected",
       last_synced_at: null,
       error_message: null,
-      settings: { gmailTaskFilters: { taskTriggers: ["assignment"], excludedPhrases: ["sale"] } },
+      settings: { gmailTaskFilters: { taskTriggers: ["assignment"], excludedPhrases: ["sale"], includedCategories: { promotions: true, social: false, updates: false } } },
     });
 
     expect((screen.getByLabelText(/Task triggers/) as HTMLTextAreaElement).value).toBe("assignment");
     expect((screen.getByLabelText(/Never create a task/) as HTMLTextAreaElement).value).toBe("sale");
+    expect((screen.getByLabelText("Promotions") as HTMLInputElement).checked).toBe(true);
   });
 });

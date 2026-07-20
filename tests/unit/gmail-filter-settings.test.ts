@@ -33,14 +33,14 @@ describe("Gmail filter settings", () => {
 
     const response = await PUT(new Request("https://scht.test/api/integrations/google/filters", {
       method: "PUT",
-      body: JSON.stringify({ taskTriggers: ["Assignment"], excludedPhrases: ["Sale"] }),
+      body: JSON.stringify({ taskTriggers: ["Assignment"], excludedPhrases: ["Sale"], includedCategories: { promotions: true, social: false, updates: true } }),
     }));
 
     expect(response.status).toBe(200);
     expect(connection.update).toHaveBeenCalledWith({
       settings: {
         sync: { calendar: { state: "synced" } },
-        gmailTaskFilters: { taskTriggers: ["assignment"], excludedPhrases: ["sale"] },
+        gmailTaskFilters: { taskTriggers: ["assignment"], excludedPhrases: ["sale"], includedCategories: { promotions: true, social: false, updates: true } },
       },
     });
   });

@@ -62,6 +62,7 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
   const initialGmailFilters = gmailTaskFilters(settingsRecord(initialGoogleConnection?.settings).gmailTaskFilters);
   const [gmailTaskTriggers, setGmailTaskTriggers] = useState(initialGmailFilters.taskTriggers.join("\n"));
   const [gmailExcludedPhrases, setGmailExcludedPhrases] = useState(initialGmailFilters.excludedPhrases.join("\n"));
+  const [gmailIncludedCategories, setGmailIncludedCategories] = useState(initialGmailFilters.includedCategories);
   const [savingGmailFilters, setSavingGmailFilters] = useState(false);
   const googleConnected = googleConnection?.status === "connected";
   const canvasConnected = canvasConnection?.status === "connected";
@@ -149,7 +150,7 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
   async function saveGmailFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSavingGmailFilters(true);
-    const filters = { taskTriggers: filterLines(gmailTaskTriggers), excludedPhrases: filterLines(gmailExcludedPhrases) };
+    const filters = { taskTriggers: filterLines(gmailTaskTriggers), excludedPhrases: filterLines(gmailExcludedPhrases), includedCategories: gmailIncludedCategories };
     try {
       const response = await fetch("/api/integrations/google/filters", {
         method: "PUT",
@@ -218,13 +219,14 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
           </div>
           <form className="mt-6 rounded-2xl border border-white/15 bg-white/5 p-4" onSubmit={(event) => void saveGmailFilters(event)}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div><h4 className="font-bold">Gmail task filters</h4><p className="mt-1 text-sm leading-6 text-[#d7ebe7]">Only unread inbox messages matching a trigger become tasks. Promotions, social, updates, spam, and trash are always skipped.</p></div>
+              <div><h4 className="font-bold">Gmail task filters</h4><p className="mt-1 text-sm leading-6 text-[#d7ebe7]">Only unread inbox messages matching a trigger become tasks. Choose whether Promotions, Social, or Updates can qualify; spam and trash are always skipped.</p></div>
               <span className="text-xs font-bold text-[#c7e6dd]">Editable per account</span>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-bold text-white">Task triggers <span className="font-normal text-[#d7ebe7]">(one phrase per line)</span><textarea className="mt-1.5 min-h-32 w-full rounded-xl border border-white/20 bg-[#073f42] px-3 py-2 text-sm text-white placeholder:text-[#b8d2cd] focus:border-[#c7e6dd]" disabled={savingGmailFilters || !googleConnected} onChange={(event) => setGmailTaskTriggers(event.target.value)} value={gmailTaskTriggers} /></label>
               <label className="text-sm font-bold text-white">Never create a task when it contains <span className="font-normal text-[#d7ebe7]">(one phrase per line)</span><textarea className="mt-1.5 min-h-32 w-full rounded-xl border border-white/20 bg-[#073f42] px-3 py-2 text-sm text-white placeholder:text-[#b8d2cd] focus:border-[#c7e6dd]" disabled={savingGmailFilters || !googleConnected} onChange={(event) => setGmailExcludedPhrases(event.target.value)} value={gmailExcludedPhrases} /></label>
             </div>
+            <fieldset className="mt-4"><legend className="text-sm font-bold text-white">Inbox categories allowed to create tasks</legend><div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-[#d7ebe7]">{([['promotions', 'Promotions'], ['social', 'Social'], ['updates', 'Updates']] as const).map(([category, label]) => <label className="inline-flex min-h-11 items-center gap-2" key={category}><input checked={gmailIncludedCategories[category]} className="size-4 accent-[#dff0ec]" disabled={savingGmailFilters || !googleConnected} onChange={(event) => setGmailIncludedCategories((current) => ({ ...current, [category]: event.target.checked }))} type="checkbox" />{label}</label>)}</div></fieldset>
             <button className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#073f42] transition hover:bg-[#dff0ec] disabled:cursor-not-allowed disabled:opacity-60" disabled={savingGmailFilters || !googleConnected} type="submit">{savingGmailFilters ? "Saving filters…" : "Save Gmail filters"}</button>
           </form>
         </article>
