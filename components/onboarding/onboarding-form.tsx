@@ -10,6 +10,11 @@ const termStartMonth: Record<AcademicTermName, number> = {
   "First Semester": 7,
   "Second Semester": 0,
 };
+const termStartYearOffset: Record<AcademicTermName, number> = {
+  Intersession: 1,
+  "First Semester": 0,
+  "Second Semester": 1,
+};
 const terms: AcademicTermName[] = [
   "Intersession",
   "First Semester",
@@ -38,7 +43,7 @@ export function OnboardingForm({
     }
     setIsSaving(true);
     setError("");
-    const startsOn = new Date(Date.UTC(year, termStartMonth[termName], 1))
+    const startsOn = new Date(Date.UTC(year + termStartYearOffset[termName], termStartMonth[termName], 1))
       .toISOString()
       .slice(0, 10);
     const supabase = createClient();

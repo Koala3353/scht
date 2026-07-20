@@ -12,6 +12,19 @@ const requestSchema = z.object({
   messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(6000) })).min(1).max(12),
 });
 
+function responseUsage(value: unknown) {
+  const parsed = z.object({
+    prompt_tokens: z.number().int().nonnegative().optional(),
+    completion_tokens: z.number().int().nonnegative().optional(),
+    total_tokens: z.number().int().nonnegative().optional(),
+  }).safeParse(value);
+  if (!parsed.success) return undefined;
+  const inputTokens = parsed.data.prompt_tokens ?? 0;
+  const outputTokens = parsed.data.completion_tokens ?? 0;
+  const totalTokens = parsed.data.total_tokens ?? inputTokens + outputTokens;
+  return totalTokens > 0 ? { inputTokens, outputTokens, totalTokens } : undefined;
+}
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -57,10 +70,10 @@ export async function POST(request: Request) {
       }),
     });
     if (!response.ok) return NextResponse.json({ error: `AI provider request failed (${response.status}).` }, { status: 502 });
-    const result = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const result = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
     const message = result.choices?.[0]?.message?.content?.trim();
     if (!message) return NextResponse.json({ error: "The AI provider returned an empty response. Try again." }, { status: 502 });
-    return NextResponse.json({ message, usedWorkspaceContext: Boolean(context) });
+    return NextResponse.json({ message, usedWorkspaceContext: Boolean(context), usage: responseUsage(result.usage) });
   } catch {
     return NextResponse.json({ error: "The AI provider could not be reached. Check your connection and try again." }, { status: 502 });
   }

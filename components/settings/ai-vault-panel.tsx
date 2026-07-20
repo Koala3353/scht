@@ -8,6 +8,7 @@ import {
   encryptVault,
   type EncryptedVault,
 } from "@/lib/ai/vault";
+import { saveUnlockedAiKeys, type AiProvider } from "@/lib/ai/unlocked-vault";
 import { createClient } from "@/lib/supabase/client";
 
 function toBytea(bytes: Uint8Array) {
@@ -21,11 +22,9 @@ function fromBytea(value: string) {
   );
 }
 
-const sessionVaultKey = "scht-unlocked-ai-keys";
-
 export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boolean }) {
   const { toast } = useToast();
-  const [provider, setProvider] = useState<"openai" | "hackclub">("openai");
+  const [provider, setProvider] = useState<AiProvider>("openai");
   const [apiKey, setApiKey] = useState("");
   const [passphrase, setPassphrase] = useState("");
   const [notice, setNotice] = useState("");
@@ -63,7 +62,7 @@ export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boole
         : {};
       const values = { ...savedValues, [provider]: apiKey };
       const encrypted = await encryptVault(passphrase, values);
-      sessionStorage.setItem(sessionVaultKey, JSON.stringify(values));
+      saveUnlockedAiKeys(values);
       const { error } = await supabase.from("encrypted_ai_vaults").upsert(
         {
           user_id: user.id,
@@ -126,7 +125,7 @@ export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boole
         salt: fromBytea(data.salt),
         iv: fromBytea(data.iv),
       } satisfies EncryptedVault);
-      sessionStorage.setItem(sessionVaultKey, JSON.stringify(values));
+      saveUnlockedAiKeys(values);
       setNotice(
         `Vault unlocked for this browser tab. Saved providers: ${Object.keys(values).join(", ")}.`,
       );
@@ -174,7 +173,7 @@ export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boole
             <select
               className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal"
               onChange={(event) =>
-                setProvider(event.target.value as "openai" | "hackclub")
+                setProvider(event.target.value as AiProvider)
               }
               value={provider}
             >
@@ -230,6 +229,7 @@ export function AiVaultPanel({ connectedDataOptIn }: { connectedDataOptIn: boole
             <button className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border border-teal px-4 py-2 font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:opacity-60" disabled={privacyBusy} onClick={() => void saveConnectedDataPrivacy()} type="button">
               Save privacy choice
             </button>
+            <p className="mt-4 border-t border-[#cfdde8] pt-3">Scht shows the tokens used by each AI response and this chat session. Remaining account credit is not exposed to normal provider keys; check it in your provider dashboard instead.</p>
           </div>
         </form>
       </div>

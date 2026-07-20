@@ -27,7 +27,8 @@ export default async function AuthenticatedLayout({
       .from("academic_terms")
       .select("id, academic_year, name")
       .eq("user_id", user.id)
-      .order("academic_year", { ascending: false }),
+      .order("academic_year", { ascending: false })
+      .order("starts_on", { ascending: false }),
     supabase
       .from("integration_connections")
       .select("status")

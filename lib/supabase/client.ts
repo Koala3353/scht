@@ -15,5 +15,11 @@ function getBrowserSupabaseEnvironment() {
 
 export function createClient() {
   const { url, anonKey } = getBrowserSupabaseEnvironment();
-  return createBrowserClient(url, anonKey);
+  return createBrowserClient(url, anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
 }

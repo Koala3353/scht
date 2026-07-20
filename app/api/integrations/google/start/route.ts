@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
   if (!clientId) return NextResponse.redirect(new URL("/settings?integration=google-error", request.url));
   const state = randomBytes(32).toString("base64url");
+  const forceConsent = request.nextUrl.searchParams.get("consent") === "1";
   const callbackUrl = new URL("/api/integrations/google/callback", request.nextUrl.origin);
   const authorizationUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authorizationUrl.search = new URLSearchParams({
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest) {
     response_type: "code",
     scope: "openid email https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.readonly",
     access_type: "offline",
-    prompt: "consent select_account",
+    // Normal linking reuses the durable server-side refresh token. Consent is
+    // only forced when a user deliberately reconnects a broken account.
+    prompt: forceConsent ? "consent select_account" : "select_account",
     include_granted_scopes: "true",
     state,
   }).toString();
