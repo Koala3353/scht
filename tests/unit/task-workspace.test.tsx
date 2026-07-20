@@ -96,7 +96,7 @@ describe("shared task workspace", () => {
 
     expect(screen.getByText("Canvas")).not.toBeNull();
     expect(screen.getByText("Read chapters 3 and 4.")).not.toBeNull();
-    expect(screen.getByRole("link", { name: "Open source link" })).not.toBeNull();
+    expect(screen.getByRole("link", { name: "Open Canvas assignment" })).not.toBeNull();
     await user.click(screen.getByRole("button", { name: "Complete Canvas assignment" }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ completedAt: expect.any(String) }), "2026-07-19T10:00:00.000Z");
     await user.click(screen.getByRole("button", { name: "Edit Canvas assignment" }));

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Pencil, RotateCcw } from "lucide-react";
+import { CheckCircle2, ExternalLink, Pencil, RotateCcw } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
 import { AssignmentPrompt } from "../ai/assignment-prompt";
@@ -76,7 +76,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
                     {task.effortMinutes && <span className="rounded-md bg-slate-100 px-2 py-1">{task.effortMinutes} min</span>}
                     {task.weightPercent !== null && task.weightPercent !== undefined && <span className="rounded-md bg-[#f7ebe3] px-2 py-1 text-action">Grade impact · {task.weightPercent}%</span>}
                   </div>
-                  {task.links.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{task.links.map((link, index) => <a className="text-sm font-bold text-teal underline decoration-teal/30 underline-offset-4" href={link} key={link} rel="noreferrer" target="_blank" aria-label={index === 0 ? "Open source link" : `Open link ${index + 1}`}>Open link {index + 1}</a>)}</div>}
+                  {task.links.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{task.links.map((link, index) => { const canvasAssignment = task.source === "canvas" && index === 0; const label = canvasAssignment ? "Open Canvas assignment" : index === 0 ? "Open source link" : `Open link ${index + 1}`; return <a className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href={link} key={link} rel="noreferrer" target="_blank" aria-label={label}>{canvasAssignment ? "Open Canvas assignment" : `Open link ${index + 1}`}<ExternalLink aria-hidden="true" className="size-3.5" /></a>; })}</div>}
                 </div>
               </div>
             )}

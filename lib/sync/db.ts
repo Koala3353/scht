@@ -24,6 +24,14 @@ export class TaskDatabase extends Dexie {
         await transaction.table('tasks').clear();
         await transaction.table('outbox').clear();
       });
+
+    // Some early browser installs were created before the durable outbox was
+    // fully registered. A schema-only bump makes IndexedDB create that store
+    // on the next open, without clearing the user-scoped cache.
+    this.version(3).stores({
+      tasks: 'id,userId,termId,dueAt,updatedAt,completedAt,[userId+termId]',
+      outbox: 'id,userId,createdAt,nextAttemptAt,[userId+nextAttemptAt]',
+    });
   }
 }
 

@@ -27,7 +27,7 @@ describe("CalendarWorkspace", () => {
 
     expect(screen.getByText("Use the lecture notes.")).not.toBeNull();
     expect(screen.getByText("Canvas")).not.toBeNull();
-    expect(screen.getByRole("link", { name: "Open source link" }).getAttribute("href")).toBe(task.links[0]);
+    expect(screen.getByRole("link", { name: "Open Canvas assignment" }).getAttribute("href")).toBe(task.links[0]);
     expect(screen.getByRole("link", { name: "Open event" }).getAttribute("target")).toBe("_blank");
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Complete Canvas reflection" }));
