@@ -7,7 +7,7 @@ import { TaskList } from "../tasks/task-list";
 import { sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "../tasks/task-editor";
 import { useTaskSyncWorkspace } from "../tasks/use-task-sync-workspace";
 import { WorkManager } from "../work/work-manager";
-import type { CachedTask, TaskView } from "../../lib/sync/types";
+import type { CachedTask } from "../../lib/sync/types";
 
 export type PlannerTask = CachedTask;
 
@@ -27,18 +27,13 @@ type SaveFailure = {
   task: CachedTask;
   baseUpdatedAt: string | null;
   reason: string;
-  syncState: "conflict" | "rejected";
-  canonicalTask?: TaskView;
 };
 
 export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, terms, subjects, projects, hiddenSubjectIds = [], focusedTaskId = null, approvedCategoryLabelsBySubject = {} }: PlannerWorkspaceProps) {
-  const { tasks, setTasks, saveTask: saveLocalTask, retrySynchronization, syncState } = useTaskSyncWorkspace({
+  const { tasks, saveTask: saveLocalTask, syncState } = useTaskSyncWorkspace({
     userId,
     initialTasks,
     currentTermId,
-    // Planner's server result is paged by the provider and may not be a full
-    // account snapshot; never prune a durable cache row from that projection.
-    pruneMissingSnapshot: false,
     filterTasks: (cachedTasks) => cachedTasks.filter((task) => !task.subjectId || !hiddenSubjectIds.includes(task.subjectId)),
   });
   const [source, setSource] = useState("all");
@@ -61,17 +56,10 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
 
   async function saveTask(task: CachedTask, baseUpdatedAt: string | null) {
     try {
-      const result = await saveLocalTask(task, baseUpdatedAt);
-      const rejected = result.rejected.find((candidate) => candidate.taskId === task.id);
-      if (result.networkError || rejected) {
-        const reason = rejected?.reason ?? result.networkErrorMessage ?? "Task sync failed.";
-        const failedTask: CachedTask = { ...task, syncState: rejected?.syncState ?? "pending", syncError: reason, ...(rejected?.task ? { canonicalTask: rejected.task } : {}) };
-        setSaveFailure({ task: failedTask, baseUpdatedAt, reason, syncState: rejected?.syncState ?? "rejected", canonicalTask: rejected?.task });
-      } else {
-        setSaveFailure(null);
-      }
+      await saveLocalTask(task, baseUpdatedAt);
+      setSaveFailure(null);
     } catch (error) {
-      setSaveFailure({ task, baseUpdatedAt, reason: error instanceof Error ? error.message : "Task sync failed. Retry this saved change.", syncState: "rejected" });
+      setSaveFailure({ task, baseUpdatedAt, reason: error instanceof Error ? error.message : "Task could not be saved." });
     }
   }
 
@@ -93,7 +81,7 @@ export function PlannerWorkspace({ tasks: initialTasks, userId, currentTermId, t
       {filtered && <button className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-teal hover:bg-[#e6f2f0]" type="button" onClick={clearFilters}><FilterX className="size-4" aria-hidden="true" />Clear filters</button>}
     </div>
     <div className="mt-5"><TaskList approvedCategoryLabelsBySubject={approvedCategoryLabelsBySubject} currentTermId={currentTermId} initialEditingId={focusedTaskId} onSave={saveTask} projects={projects} subjects={subjects} tasks={visible} terms={terms} /></div>
-    {(saveFailure || syncState === "Sync failed") && <section className="mt-5 rounded-xl border border-action/30 bg-[#fff8f3] p-4 text-sm text-slate-700" role="status"><p className="font-semibold text-action">{saveFailure?.reason ?? "Task sync failed."} Retry this saved change.</p><div className="mt-3 flex flex-wrap gap-3"><button className="min-h-11 rounded-xl border border-action px-4 py-2 font-bold text-action" onClick={() => void retrySynchronization()} type="button">Retry saved change</button>{saveFailure?.canonicalTask && <button className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 font-bold text-ink" onClick={() => { const canonicalTask = { ...saveFailure.canonicalTask!, userId: saveFailure.task.userId, syncState: "synced" as const }; setTasks((current) => current.map((candidate) => candidate.id === canonicalTask.id ? canonicalTask : candidate)); setSaveFailure(null); }} type="button">Use latest server version</button>}</div></section>}
+    {(saveFailure || syncState === "Sync failed" || syncState === "Offline") && <section className="mt-5 rounded-xl border border-action/30 bg-[#fff8f3] p-4 text-sm text-slate-700" role="status"><p className="font-semibold text-action">{saveFailure?.reason ?? "Reconnect to save task changes to Supabase."}</p>{saveFailure ? <div className="mt-3"><button className="min-h-11 rounded-xl border border-action px-4 py-2 font-bold text-action" onClick={() => void saveTask(saveFailure.task, saveFailure.baseUpdatedAt)} type="button">Retry save</button></div> : null}</section>}
     <div className="mt-8"><WorkManager initialProjects={projects.map((item) => ({ id: item.id, name: item.label, status: item.status }))} onSaveTask={saveTask} tasks={tasks.filter((task) => !task.completedAt)} /></div>
   </section>;
 }

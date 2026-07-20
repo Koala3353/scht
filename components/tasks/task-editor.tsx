@@ -85,6 +85,8 @@ export function TaskEditor({
     setSaving(true);
     try {
       await onSave(nextTask, baseUpdatedAt === undefined ? task.updatedAt ?? null : baseUpdatedAt);
+    } catch {
+      // The owning workspace renders the save failure and retry action.
     } finally {
       setSaving(false);
     }

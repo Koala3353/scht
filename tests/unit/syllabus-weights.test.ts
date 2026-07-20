@@ -6,34 +6,8 @@ import { candidateWeightsAreComplete, extractCandidateWeights } from '../../lib/
 import { SubjectTaskQueue } from '../../components/subjects/subject-task-queue';
 import type { CachedTask } from '../../lib/sync/types';
 
-const cachedTasks = new Map<string, Record<string, unknown>>();
-const queuedMutations = new Map<string, Record<string, unknown>>();
-
-vi.mock('../../lib/sync/db', () => ({
-  taskDb: {
-    tasks: {
-      where: vi.fn(() => ({ equals: vi.fn((userId: string) => ({ toArray: vi.fn(async () => [...cachedTasks.values()].filter((task) => task.userId === userId)) })) })),
-      get: vi.fn(async (id: string) => cachedTasks.get(id)),
-      put: vi.fn(async (task: Record<string, unknown>) => { cachedTasks.set(task.id as string, task); }),
-      bulkPut: vi.fn(async (items: Record<string, unknown>[]) => { items.forEach((task) => cachedTasks.set(task.id as string, task)); }),
-      update: vi.fn(async (id: string, changes: Record<string, unknown>) => { cachedTasks.set(id, { ...cachedTasks.get(id), ...changes }); }),
-      delete: vi.fn(async (id: string) => { cachedTasks.delete(id); }),
-    },
-    outbox: {
-      where: vi.fn(() => ({ equals: vi.fn((userId: string) => ({ toArray: vi.fn(async () => [...queuedMutations.values()].filter((mutation) => mutation.userId === userId)) })) })),
-      get: vi.fn(async (id: string) => queuedMutations.get(id)),
-      put: vi.fn(async (mutation: Record<string, unknown>) => { queuedMutations.set(mutation.id as string, mutation); }),
-      update: vi.fn(async (id: string, changes: Record<string, unknown>) => { queuedMutations.set(id, { ...queuedMutations.get(id), ...changes }); }),
-      delete: vi.fn(async (id: string) => { queuedMutations.delete(id); }),
-    },
-    transaction: vi.fn(async (_mode: string, _table: unknown, callback: () => Promise<unknown>) => callback()),
-  },
-}));
-
 afterEach(() => {
   cleanup();
-  cachedTasks.clear();
-  queuedMutations.clear();
   vi.unstubAllGlobals();
 });
 

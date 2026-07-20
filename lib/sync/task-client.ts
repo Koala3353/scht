@@ -1,17 +1,12 @@
 "use client";
 
-import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "../../components/tasks/task-types";
-
-import * as taskDatabase from "./db";
-import { enqueueTaskMutation, flushTaskOutbox } from "./outbox";
 import type { CachedTask, TaskMutation, TaskSyncResponse } from "./types";
 
-const { taskDb } = taskDatabase;
-
-async function ensureLocalTaskStorage() {
-  // Older focused unit-test doubles expose only taskDb. Real browser builds
-  // always include the repair guard exported by db.ts.
-  if ("ensureTaskDatabase" in taskDatabase) await taskDatabase.ensureTaskDatabase();
+export class TaskSaveError extends Error {
+  constructor(message: string, readonly canonicalTask?: CachedTask["canonicalTask"]) {
+    super(message);
+    this.name = "TaskSaveError";
+  }
 }
 
 export async function postTaskMutations(mutations: TaskMutation[]): Promise<TaskSyncResponse> {
@@ -20,98 +15,40 @@ export async function postTaskMutations(mutations: TaskMutation[]): Promise<Task
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ mutations }),
   });
+  const body = await response.json().catch(() => ({})) as Partial<TaskSyncResponse> & { error?: unknown };
   if (!response.ok) {
-    const body = typeof response.json === "function"
-      ? await response.json().catch(() => ({})) as { error?: unknown }
-      : {};
-    throw new Error(typeof body.error === "string" ? body.error : "Task sync failed.");
+    throw new TaskSaveError(typeof body.error === "string" ? body.error : "Task could not be saved to Supabase.");
   }
-  return response.json() as Promise<TaskSyncResponse>;
+  if (!Array.isArray(body.accepted) || !Array.isArray(body.rejected)) {
+    throw new TaskSaveError("Task save returned an invalid response.");
+  }
+  return body as TaskSyncResponse;
 }
 
-/**
- * Reconcile a server projection into the authenticated cache. Projections such
- * as Calendar and Subjects are partial, so they deliberately do not prune
- * cached rows which fall outside their current query.
- */
-export async function hydrateTaskCache({
-  userId,
-  snapshot,
-  currentTermId = null,
-  pruneMissingSnapshot = false,
-}: {
-  userId: string;
-  snapshot: CachedTask[];
-  currentTermId?: string | null;
-  pruneMissingSnapshot?: boolean;
-}) {
-  await ensureLocalTaskStorage();
-  const localTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
-  const mergedTasks = mergeTaskSnapshot(localTasks, snapshot, userId, currentTermId, pruneMissingSnapshot);
-  await taskDb.transaction("rw", taskDb.tasks, async () => {
-    const mergedIds = new Set(mergedTasks.map((task) => task.id));
-    await Promise.all(
-      localTasks
-        .filter((task) => !mergedIds.has(task.id))
-        .map((task) => taskDb.tasks.delete(task.id)),
-    );
-    await taskDb.tasks.bulkPut(mergedTasks);
-  });
-  return mergedTasks;
-}
-
-/** Apply sync acknowledgements to the same user-scoped cache used offline. */
-export async function synchronizeTaskCache(userId: string): Promise<TaskSyncResponse> {
-  await ensureLocalTaskStorage();
-  const response = await flushTaskOutbox(userId, postTaskMutations);
-  await taskDb.transaction("rw", taskDb.tasks, async () => {
-    const pendingMutations = (await taskDb.outbox.where("userId").equals(userId).toArray())
-      .filter((mutation) => mutation.syncState === "pending");
-    await Promise.all(
-      response.accepted.map(async ({ task }) => {
-        const localTask = await taskDb.tasks.get(task.id);
-        if (shouldApplyAcceptedTask(localTask, task, pendingMutations)) {
-          await taskDb.tasks.put({ ...task, userId, syncState: "synced" });
-        }
-      }),
-    );
-    await Promise.all(
-      response.rejected.map(async ({ id, taskId, task: canonicalTask, reason, syncState }) => {
-        const mutation = await taskDb.outbox.get(id);
-        const affectedTaskId = taskId ?? mutation?.payload.id;
-        if (!affectedTaskId) return;
-        const localTask = await taskDb.tasks.get(affectedTaskId);
-        if (localTask?.userId === userId) {
-          await taskDb.tasks.update(affectedTaskId, {
-            syncState,
-            syncError: reason,
-            ...(canonicalTask ? { canonicalTask } : {}),
-          });
-        }
-      }),
-    );
-  });
-  return response;
-}
-
-/**
- * Persist before transport. A failed or offline request leaves both the task
- * and its mutation in IndexedDB for retry after navigation or refresh.
- */
-export async function saveTaskLocally(
+/** Save one task directly to the authenticated Supabase-backed API. */
+export async function saveTaskRemotely(
   userId: string,
   task: CachedTask,
   baseUpdatedAt: string | null,
-): Promise<TaskSyncResponse> {
-  if (task.userId !== userId) throw new Error("This task belongs to another account.");
-  await ensureLocalTaskStorage();
-  await taskDb.tasks.put({ ...task, syncState: "pending", syncError: undefined, canonicalTask: undefined });
-  await enqueueTaskMutation({
+): Promise<CachedTask> {
+  if (task.userId !== userId) throw new TaskSaveError("This task belongs to another account.");
+
+  const mutation: TaskMutation = {
     id: crypto.randomUUID(),
     userId,
     operation: "upsert",
     payload: task,
     baseUpdatedAt,
-  });
-  return synchronizeTaskCache(userId);
+    createdAt: Date.now(),
+    attempts: 0,
+    nextAttemptAt: 0,
+    syncState: "pending",
+  };
+  const response = await postTaskMutations([mutation]);
+  const rejected = response.rejected[0];
+  if (rejected) throw new TaskSaveError(rejected.reason, rejected.task);
+  const accepted = response.accepted[0];
+  if (!accepted) throw new TaskSaveError("Task save was not acknowledged.");
+
+  return { ...accepted.task, userId, syncState: "synced" };
 }
