@@ -1,5 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import manifest from '../../app/manifest';
 import { AppShell } from '../../components/layout/app-shell';
 
@@ -29,5 +32,17 @@ describe('PWA manifest', () => {
         .getByRole('link', { name: 'More' })
         .getAttribute('href'),
     ).toBe('/settings');
+  });
+
+  it('uses prefetched client links for app navigation instead of document reloads', () => {
+    const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+    const shell = readFileSync(
+      path.resolve(testDirectory, '../../components/layout/app-shell.tsx'),
+      'utf8',
+    );
+
+    expect(shell).toContain('import Link from "next/link"');
+    expect(shell).toContain('prefetch');
+    expect(shell).not.toMatch(/<a\s[\s\S]*?href=\{href\}/);
   });
 });
