@@ -23,7 +23,7 @@ export default async function OnboardingPage({
     .select("current_term_id, onboarding_completed_at")
     .eq("id", user.id)
     .maybeSingle();
-  if (profile?.onboarding_completed_at) redirect("/today");
+  if (profile?.onboarding_completed_at && params.step !== "curriculum") redirect("/today");
   const [{ data: currentTerm }, { data: connections }] =
     profile?.current_term_id
       ? await Promise.all([

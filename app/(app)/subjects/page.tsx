@@ -116,7 +116,10 @@ export default async function SubjectsPage() {
           Course notes, syllabus review, Canvas state, and grade progress stay
           grouped by class.
         </PageHeader>
-        <ProviderResync providers={savedProviders} />
+        <div className="flex flex-wrap items-center gap-3">
+          <a className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href="/onboarding?step=curriculum">Import or update IPS</a>
+          <ProviderResync providers={savedProviders} />
+        </div>
       </div>
       <section className="mx-auto mt-6 grid max-w-5xl gap-4 px-4 sm:grid-cols-2 sm:px-0">
         {(subjects ?? []).map((subject) => (
