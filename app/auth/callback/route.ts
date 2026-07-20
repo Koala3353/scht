@@ -33,33 +33,31 @@ export async function GET(request: NextRequest) {
   const session = authData.session;
   if (!user) return redirectTo(request, authFailurePath('authentication-failed'), isGoogleIntegration);
 
-  const { data: accepted, error: inviteError } = await supabase.rpc('accept_invite_for_current_user');
-  if (inviteError) return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
+  const loadProfile = () =>
+    supabase
+      .from('profiles')
+      .select('role, onboarding_completed_at')
+      .eq('id', user.id)
+      .maybeSingle();
 
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role, onboarding_completed_at')
-    .eq('id', user.id)
-    .maybeSingle();
+  let { data: profile, error: profileError } = await loadProfile();
+
+  if (!profile && !profileError) {
+    const { error: inviteError } = await supabase.rpc(
+      'accept_invite_for_current_user',
+    );
+    if (inviteError) {
+      await supabase.auth.signOut();
+      return redirectTo(request, authFailurePath('workspace-access-check-failed'), isGoogleIntegration);
+    }
+    const recoveredProfile = await loadProfile();
+    profile = recoveredProfile.data;
+    profileError = recoveredProfile.error;
+  }
+
   if (profileError || !profile) {
     await supabase.auth.signOut();
     return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
-  }
-
-  if (profile.role !== 'owner_admin' && !accepted) {
-    const email = user.email?.trim().toLowerCase();
-    const { data: invite, error: inviteLookupError } = email
-      ? await supabase
-          .from('invites')
-          .select('accepted_by, accepted_at')
-          .eq('normalized_email', email)
-          .maybeSingle()
-      : { data: null, error: new Error('Missing account email.') };
-
-    if (inviteLookupError || invite?.accepted_by !== user.id || !invite.accepted_at) {
-      await supabase.auth.signOut();
-      return redirectTo(request, authFailurePath('invite-required'), isGoogleIntegration);
-    }
   }
 
   if (isGoogleIntegration) {

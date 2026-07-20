@@ -13,6 +13,7 @@ describe("AdminSignIn", () => {
   it("explains when an authenticated account is not an owner admin", () => {
     render(
       <AdminSignIn
+        canSignOut
         error="not-owner"
         googleAudienceUrl="https://console.cloud.google.com/auth/audience?project=scht-502902"
       />,
@@ -27,12 +28,14 @@ describe("AdminSignIn", () => {
   it("makes the Google test-user requirement clear before OAuth begins", () => {
     render(
       <AdminSignIn
+        canSignOut={false}
         error="google-access-denied"
         googleAudienceUrl="https://console.cloud.google.com/auth/audience?project=scht-502902"
       />,
     );
 
     expect(screen.getByText(/Google rejected this account/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     expect(screen.getByRole("link", { name: /open Google test users/i }).getAttribute("href")).toBe(
       "https://console.cloud.google.com/auth/audience?project=scht-502902",
     );

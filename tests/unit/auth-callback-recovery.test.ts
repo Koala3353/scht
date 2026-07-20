@@ -15,11 +15,12 @@ const reset = readFileSync(
 );
 
 describe("reset invite recovery contract", () => {
-  it("accepts or recovers an invitation before rejecting a missing profile", () => {
+  it("checks an established profile before using the invite-recovery fallback", () => {
     expect(callback.indexOf("accept_invite_for_current_user")).toBeGreaterThan(-1);
-    expect(callback.indexOf("accept_invite_for_current_user")).toBeLessThan(
-      callback.indexOf(".from('profiles')"),
+    expect(callback.indexOf(".from('profiles')")).toBeLessThan(
+      callback.indexOf("accept_invite_for_current_user"),
     );
+    expect(callback).toContain("if (!profile && !profileError)");
   });
 
   it("provisions profiles only for the one-use owner bootstrap or a locked pending invite", () => {

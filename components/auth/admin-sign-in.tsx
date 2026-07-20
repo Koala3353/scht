@@ -8,6 +8,7 @@ import { createClient } from "../../lib/supabase/client";
 import { SignOutButton } from "./sign-out-button";
 
 type AdminSignInProps = {
+  canSignOut: boolean;
   error?: string;
   googleAudienceUrl: string;
 };
@@ -20,6 +21,8 @@ const errorMessages: Record<string, string> = {
     "This account signed in successfully, but it is not approved as an owner admin for Scht.",
   "invite-required":
     "This account does not have access to the Scht workspace yet. Ask an existing owner admin to add it first.",
+  "workspace-access-check-failed":
+    "Scht could not verify workspace access. Please try again; if it continues, check the Supabase Auth setup for this deployment.",
   "authentication-failed": "The sign-in exchange did not finish. Please try again.",
   "missing-auth-code": "Google did not return a sign-in code. Please try again.",
 };
@@ -28,7 +31,7 @@ function adminCallbackUrl() {
   return `${window.location.origin}/auth/callback?next=/admin`;
 }
 
-export function AdminSignIn({ error, googleAudienceUrl }: AdminSignInProps) {
+export function AdminSignIn({ canSignOut, error, googleAudienceUrl }: AdminSignInProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
   const errorMessage = error ? errorMessages[error] : "";
@@ -99,7 +102,7 @@ export function AdminSignIn({ error, googleAudienceUrl }: AdminSignInProps) {
             <Link className="text-sm font-bold text-teal hover:underline" href="/">
               Use student sign-in instead
             </Link>
-            <SignOutButton />
+            {canSignOut ? <SignOutButton /> : null}
           </div>
         </div>
 
