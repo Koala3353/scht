@@ -20,6 +20,7 @@ describe("reset invite recovery contract", () => {
     expect(callback.indexOf(".from('profiles')")).toBeLessThan(
       callback.indexOf("accept_invite_for_current_user"),
     );
+    expect(callback).toContain("const adminSupabase = createAdminClient()");
     expect(callback).toContain("if (!profile && !profileError)");
   });
 

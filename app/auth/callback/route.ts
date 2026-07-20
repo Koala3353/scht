@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { encryptCredentials } from '@/lib/integrations/credentials';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
 const pendingCookie = 'scht-google-integration-pending';
@@ -33,8 +34,12 @@ export async function GET(request: NextRequest) {
   const session = authData.session;
   if (!user) return redirectTo(request, authFailurePath('authentication-failed'), isGoogleIntegration);
 
+  // The session exchange has already authenticated `user.id`. Use the
+  // server-only client for this access check so an RLS policy failure cannot
+  // turn an existing owner profile into an invite-required response.
+  const adminSupabase = createAdminClient();
   const loadProfile = () =>
-    supabase
+    adminSupabase
       .from('profiles')
       .select('role, onboarding_completed_at')
       .eq('id', user.id)
