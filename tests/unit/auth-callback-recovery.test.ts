@@ -21,6 +21,7 @@ describe("reset invite recovery contract", () => {
       callback.indexOf("accept_invite_for_current_user"),
     );
     expect(callback).toContain("const adminSupabase = createAdminClient()");
+    expect(callback).toContain("admin-auth-diagnostic");
     expect(callback).toContain("if (!profile && !profileError)");
   });
 
