@@ -93,17 +93,59 @@ export async function POST(request: Request) {
     if (!credentialResult.success) throw new Error("Canvas connection needs to be reconnected.");
     const credentials = credentialResult.data;
     const courses = await canvasApi<CanvasCourse[]>(credentials.baseUrl, credentials.token, "/courses?enrollment_state=active&per_page=100");
-    const subjects = courses.map((course) => ({
+    const { data: existingSubjects, error: existingSubjectError } = await supabase
+      .from("subjects")
+      .select("id, code, canvas_course_id")
+      .eq("user_id", user.id)
+      .eq("term_id", profile.current_term_id);
+    if (existingSubjectError) throw new Error("Could not inspect existing subjects before Canvas sync.");
+
+    const byCanvasCourseId = new Map(
+      (existingSubjects ?? []).flatMap((subject) => subject.canvas_course_id ? [[subject.canvas_course_id, subject] as const] : []),
+    );
+    const byManualCode = new Map(
+      (existingSubjects ?? [])
+        .filter((subject) => !subject.canvas_course_id)
+        .map((subject) => [subject.code.trim().toLowerCase(), subject] as const),
+    );
+    const matchedSubjects: Array<{ id: string; canvas_course_id: string }> = [];
+    const manualMatches: Array<{ subjectId: string; canvasCourseId: string }> = [];
+    const newSubjects = courses.flatMap((course) => {
+      const canvasCourseId = String(course.id);
+      const existingCanvasSubject = byCanvasCourseId.get(canvasCourseId);
+      if (existingCanvasSubject) {
+        matchedSubjects.push({ id: existingCanvasSubject.id, canvas_course_id: canvasCourseId });
+        return [];
+      }
+      const code = canvasCourseCode(course);
+      const matchingManualSubject = byManualCode.get(code.toLowerCase());
+      if (matchingManualSubject) {
+        manualMatches.push({ subjectId: matchingManualSubject.id, canvasCourseId });
+        return [];
+      }
+      return [{
       user_id: user.id,
       term_id: profile.current_term_id,
-      code: canvasCourseCode(course),
+      code,
       name: compactCanvasText(course.name, "Canvas course " + course.id, 180),
-      canvas_course_id: String(course.id),
+      canvas_course_id: canvasCourseId,
+      }];
+    });
+    const updatedManualSubjects = await Promise.all(manualMatches.map(async ({ subjectId, canvasCourseId }) => {
+      const { data, error } = await supabase
+        .from("subjects")
+        .update({ canvas_course_id: canvasCourseId })
+        .eq("id", subjectId)
+        .select("id, canvas_course_id")
+        .single();
+      if (error) throw new Error("Could not link an existing subject to its Canvas course.");
+      return data;
     }));
-    const { data: savedSubjects, error: subjectError } = subjects.length
-      ? await supabase.from("subjects").upsert(subjects, { onConflict: "user_id,term_id,code" }).select("id, canvas_course_id")
+    const { data: insertedSubjects, error: subjectError } = newSubjects.length
+      ? await supabase.from("subjects").insert(newSubjects).select("id, canvas_course_id")
       : { data: [], error: null };
-    if (subjectError) throw new Error("Could not save active Canvas courses.");
+    if (subjectError) throw new Error(`Could not save active Canvas courses: ${subjectError.message}`);
+    const savedSubjects = [...matchedSubjects, ...updatedManualSubjects, ...(insertedSubjects ?? [])];
 
     const assignmentCounts = await mapWithConcurrency(savedSubjects ?? [], 3, async (subject) => {
       const assignments = await canvasApi<CanvasAssignment[]>(credentials.baseUrl, credentials.token, `/courses/${subject.canvas_course_id}/assignments?per_page=100`);

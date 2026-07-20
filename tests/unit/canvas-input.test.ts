@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   canvasApi: vi.fn(),
   decryptCredentials: vi.fn(),
   encryptCredentials: vi.fn(),
+  subjectsInsert: vi.fn(),
   tasksUpsert: vi.fn(),
 }));
 
@@ -56,7 +57,11 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
         select: vi.fn(() => connectionQuery),
         update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: errorAt === "connection" ? { message: "database down" } : null })) })),
       };
-      if (table === "subjects") return { upsert: vi.fn(() => subjectMutation(errorAt === "subjects")), select: vi.fn(() => subjectsQuery) };
+      if (table === "subjects") return {
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ data: [], error: null })) })) })),
+        insert: mocks.subjectsInsert.mockImplementation(() => subjectMutation(errorAt === "subjects")),
+        update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn(async () => ({ data: { id: "saved", canvas_course_id: "42" }, error: null })) })) })) })),
+      };
       if (table === "tasks") return tasksTable;
       throw new Error(`Unexpected table ${table}`);
     }),
@@ -131,5 +136,13 @@ describe("Canvas sync persistence", () => {
     expect([first.status, second.status]).toEqual([200, 200]);
     expect(firstBody.assignments + secondBody.assignments).toBe(1);
     expect(mocks.tasksUpsert).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses Canvas IDs and manual-course matching instead of an expression-index upsert", async () => {
+    setupSync(null);
+    const response = await POST(syncRequest());
+
+    expect(response.status).toBe(200);
+    expect(mocks.subjectsInsert).toHaveBeenCalledWith(expect.any(Array));
   });
 });
