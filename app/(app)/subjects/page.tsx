@@ -146,6 +146,14 @@ export default async function SubjectsPage() {
               const approvedWeight = subjectCategories.reduce((total, category) => total + category.weightPercent, 0);
               return <div className="mt-2 text-sm text-slate-700"><p>Approved weights: {approvedWeight}%</p><p>Current calculated standing: {standing.projectedPercent === null ? "No assessed work yet" : `${standing.projectedPercent.toFixed(2)}% projected from ${standing.gradedWeightPercent}% graded`}</p></div>;
             })()}
+            {(() => {
+              const openTasks = openTasksBySubject.get(subject.id) ?? [];
+              const weekFromNow = Date.now() + 7 * 86_400_000;
+              const dueThisWeek = openTasks.filter((task) => task.dueAt && new Date(task.dueAt).getTime() <= weekFromNow).length;
+              const gradeHeavy = openTasks.filter((task) => (task.weightPercent ?? 0) >= 15).length;
+              return <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-[#f7faf9] p-3 text-center text-xs"><div><p className="text-lg font-black text-teal">{openTasks.length}</p><p className="font-semibold text-slate-600">Open work</p></div><div><p className="text-lg font-black text-teal">{dueThisWeek}</p><p className="font-semibold text-slate-600">Due this week</p></div><div><p className="text-lg font-black text-action">{gradeHeavy}</p><p className="font-semibold text-slate-600">High impact</p></div></div>;
+            })()}
+            <p className="mt-3 text-xs font-semibold text-slate-500">Canvas connection: {connections.length ? "linked and ready to resync" : "not connected"} · Syllabus: {subject.syllabus_status}</p>
             <SubjectUnitsEditor
               initialUnits={Number(subject.units)}
               subjectId={subject.id}

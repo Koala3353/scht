@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, ExternalLink, FileText, LoaderCircle, Pencil, RotateCcw } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileText, LoaderCircle, Pencil, RotateCcw, Sparkles } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
 import { AssignmentPrompt } from "../ai/assignment-prompt";
@@ -38,6 +38,7 @@ function relativeDue(dueAt: string | null | undefined) {
 export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave, initialEditingId = null, approvedCategoryLabelsBySubject = {} }: TaskListProps) {
   const [editing, setEditing] = useState<string | null>(initialEditingId);
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [celebratedTaskId, setCelebratedTaskId] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
   const hydrated = useHasHydrated();
   const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
@@ -50,6 +51,10 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
     setActionError("");
     try {
       await onSave({ ...task, completedAt: task.completedAt ? null : new Date().toISOString(), updatedAt: new Date().toISOString() }, task.updatedAt);
+      if (!task.completedAt) {
+        setCelebratedTaskId(task.id);
+        window.setTimeout(() => setCelebratedTaskId(null), 850);
+      }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Could not save this task.");
     } finally {
@@ -72,7 +77,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
               <TaskEditor currentTermId={currentTermId} onCancel={() => setEditing(null)} onSave={async (nextTask, baseUpdatedAt) => { await onSave(nextTask, baseUpdatedAt); setEditing(null); }} projects={projects} subjects={subjects} task={task} terms={terms} />
             ) : (
               <div className="flex gap-3">
-                <button aria-label={task.completedAt ? `Reopen ${task.title}` : `Complete ${task.title}`} aria-busy={savingTaskId === task.id} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-600 hover:border-teal hover:bg-[#e6f2f0] hover:text-teal disabled:cursor-not-allowed disabled:opacity-50" disabled={needsReview || savingTaskId === task.id} onClick={() => void toggleCompletion(task)} type="button">
+                <button aria-label={task.completedAt ? `Reopen ${task.title}` : `Complete ${task.title}`} aria-busy={savingTaskId === task.id} className={`task-complete-button inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-3 text-sm font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-50 ${task.completedAt ? "bg-slate-600" : "bg-teal"} ${celebratedTaskId === task.id ? "task-complete-button--celebrate" : ""}`} disabled={needsReview || savingTaskId === task.id} onClick={() => void toggleCompletion(task)} type="button">
                   {savingTaskId === task.id ? <LoaderCircle aria-hidden="true" className="size-5 animate-spin" /> : task.completedAt ? <RotateCcw aria-hidden="true" className="size-5" /> : <CheckCircle2 aria-hidden="true" className="size-5" />}
                   <span>{savingTaskId === task.id ? "Saving…" : task.completedAt ? "Reopen" : "Mark done"}</span>
                 </button>
@@ -84,6 +89,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
                     </div>
                     <div className="flex flex-wrap items-start gap-2">
                       {!task.completedAt ? <AssignmentPrompt approvedCategoryLabels={task.subjectId ? (approvedCategoryLabelsBySubject[task.subjectId] ?? []) : []} subjectLabel={task.subjectId ? (subjectLabels.get(task.subjectId) ?? "Not assigned") : "Not assigned"} task={task} /> : null}
+                      <a aria-label={`Open workspace for ${task.title}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-teal/30 px-3 py-2 text-sm font-bold text-teal hover:bg-[#e6f2f0]" href={`/assignments/${task.id}`}><Sparkles aria-hidden="true" className="size-4" />Workspace</a>
                       <button aria-label={`Edit ${task.title}`} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 px-3 py-2 text-sm font-bold text-ink hover:bg-slate-50" onClick={() => setEditing(task.id)} type="button"><Pencil aria-hidden="true" className="size-4" />Edit</button>
                     </div>
                   </div>
@@ -97,7 +103,7 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
                     {task.weightPercent !== null && task.weightPercent !== undefined && <span className="rounded-md bg-[#f7ebe3] px-2 py-1 text-action">Grade impact · {task.weightPercent}%</span>}
                   </div>
                   {task.links.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{task.links.map((link, index) => { const canvasAssignment = task.source === "canvas" && index === 0; const label = canvasAssignment ? "Open Canvas assignment" : index === 0 ? "Open source link" : `Open link ${index + 1}`; return <a className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href={link} key={link} rel="noreferrer" target="_blank" aria-label={label}>{canvasAssignment ? "Open Canvas assignment" : `Open link ${index + 1}`}<ExternalLink aria-hidden="true" className="size-3.5" /></a>; })}</div>}
-                  {task.source === "canvas" ? <a className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href={`/assignments/${task.id}`}><FileText aria-hidden="true" className="size-4" />View assignment brief</a> : null}
+                  {task.source === "canvas" ? <a className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href={`/assignments/${task.id}`}><FileText aria-hidden="true" className="size-4" />View Canvas brief</a> : null}
                 </div>
               </div>
             )}

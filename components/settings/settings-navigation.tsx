@@ -4,6 +4,8 @@ import {
   CircleHelp,
   KeyRound,
   SlidersHorizontal,
+  Bell,
+  Wrench,
 } from "lucide-react";
 
 const items = [
@@ -11,6 +13,8 @@ const items = [
   { href: "#ai-vault", label: "AI vault", icon: KeyRound },
   { href: "#academic-scale", label: "Academic scale", icon: SlidersHorizontal },
   { href: "#reminders", label: "Reminders", icon: BellRing },
+  { href: "#notification-rules", label: "Rules", icon: Bell },
+  { href: "#recovery", label: "Recovery", icon: Wrench },
   { href: "/help", label: "Help", icon: CircleHelp },
 ];
 

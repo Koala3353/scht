@@ -1,0 +1,12 @@
+"use client";
+
+import { useState } from "react";
+import { Target } from "lucide-react";
+
+type Course = { id: string; label: string; earnedPercent: number; gradedWeightPercent: number };
+
+export function GradeForecast({ courses }: { courses: Course[] }) {
+  const [target, setTarget] = useState("85");
+  const targetPercent = Number(target);
+  return <section className="mx-auto mt-6 max-w-5xl px-4 sm:px-0"><div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-semibold text-teal">Grade forecast</p><h2 className="mt-1 text-xl font-black tracking-tight">See what your remaining work needs to do.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">This uses approved syllabus weights and recorded results. It does not invent grades for work your instructor has not assessed.</p></div><label className="text-sm font-bold text-ink">Target course score<input className="mt-1 block min-h-11 w-28 rounded-xl border border-slate-300 px-3" max="100" min="0" onChange={(event) => setTarget(event.target.value)} type="number" value={target} /></label></div><div className="mt-5 grid gap-3 md:grid-cols-2">{courses.map((course) => { const remaining = Math.max(0, 100 - course.gradedWeightPercent); const needed = remaining ? (targetPercent - course.earnedPercent) / (remaining / 100) : null; const text = course.gradedWeightPercent === 0 ? "Record an assessment to calculate a target scenario." : needed === null ? "No ungraded approved weight remains." : needed <= 0 ? "Your recorded work already clears this target." : needed > 100 ? "This target is no longer mathematically reachable from the remaining approved weight." : `Average ${needed.toFixed(1)}% across the remaining ${remaining.toFixed(0)}% of the course.`; return <article className="rounded-xl bg-[#f7faf9] p-4" key={course.id}><div className="flex items-start gap-2"><Target className="mt-0.5 size-4 text-teal" /><div><h3 className="font-bold text-ink">{course.label}</h3><p className="mt-2 text-sm leading-6 text-slate-700">{text}</p><p className="mt-2 text-xs font-semibold text-slate-500">{course.gradedWeightPercent.toFixed(0)}% assessed · {course.earnedPercent.toFixed(1)} weighted points earned</p></div></div></article>; })}</div>{!courses.length ? <p className="mt-4 text-sm text-slate-600">Add subjects and approve syllabus weights to unlock target scenarios.</p> : null}</div></section>;
+}

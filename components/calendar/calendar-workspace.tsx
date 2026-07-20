@@ -7,6 +7,7 @@ import { calendarEntries, type CalendarEventView, type CalendarEntry } from "../
 import { localDayLabel } from "../../lib/calendar/range";
 import type { CachedTask } from "../../lib/sync/types";
 import { useHasHydrated } from "../format/local-date-time";
+import { SemesterTimeline } from "./semester-timeline";
 
 type CalendarWorkspaceProps = {
   userId: string;
@@ -84,5 +85,6 @@ export function CalendarWorkspace({
       </section>
     ))}
     {!entries.length ? <p className="text-slate-600">No scheduled tasks or imported events in this week.</p> : null}
+    <SemesterTimeline onMove={async (task, dueAt) => { await saveTask({ ...task, dueAt, updatedAt: new Date().toISOString() }, task.updatedAt); }} tasks={tasks} />
   </section>;
 }

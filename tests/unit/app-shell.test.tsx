@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -27,11 +27,8 @@ describe('PWA manifest', () => {
     expect(screen.getAllByRole('link', { name: 'Grades' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'AI' }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'Help' }).length).toBeGreaterThan(0);
-    expect(
-      within(screen.getByRole('navigation', { name: 'Mobile navigation' }))
-        .getByRole('link', { name: 'More' })
-        .getAttribute('href'),
-    ).toBe('/settings');
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('button', { name: 'Open navigation menu' }));
+    expect(screen.getByRole('link', { name: 'More' }).getAttribute('href')).toBe('/settings');
   });
 
   it('uses prefetched client links for app navigation instead of document reloads', () => {

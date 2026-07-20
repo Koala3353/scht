@@ -4,6 +4,8 @@ import { AcademicScalePanel } from "@/components/settings/academic-scale-panel";
 import { IntegrationsPanel } from "@/components/settings/integrations-panel";
 import { ReminderPanel } from "@/components/settings/reminder-panel";
 import { SettingsNavigation } from "@/components/settings/settings-navigation";
+import { NotificationRulesPanel } from "@/components/settings/notification-rules-panel";
+import { RecoveryCenter } from "@/components/settings/recovery-center";
 import { requireUser } from "@/lib/auth/guards";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -21,7 +23,7 @@ export default async function SettingsPage({
   const integration = settingsSearchParamsSchema.safeParse(params).data?.integration;
   const user = await requireUser();
   const supabase = await createClient();
-  const [{ data: preference }, { data: tasks }, { data: profile }, { data: connections }] =
+  const [{ data: preference }, { data: tasks }, { data: profile }, { data: connections }, { data: notificationRules }, { data: syncErrors }] =
     await Promise.all([
       supabase
         .from("reminder_preferences")
@@ -46,6 +48,8 @@ export default async function SettingsPage({
         .select("id, provider, account_key, account_email, status, last_synced_at, error_message, settings")
         .eq("user_id", user.id)
         .in("provider", ["google", "canvas"]),
+      supabase.from("notification_rules").select("kind, enabled, config").eq("user_id", user.id),
+      supabase.from("sync_errors").select("id, source, message").eq("user_id", user.id).is("resolved_at", null).order("created_at", { ascending: false }).limit(5),
     ]);
 
   const googleConnections = (connections ?? []).filter((connection) => connection.provider === "google");
@@ -90,6 +94,8 @@ export default async function SettingsPage({
             academicScale={profile?.academic_scale === "gpa" ? "gpa" : "qpi"}
           />
           <ReminderPanel preference={preference} tasks={tasks ?? []} />
+          <NotificationRulesPanel initialRules={(notificationRules ?? []) as Array<{ kind: "weighted_due" | "canvas_change" | "gmail_attention"; enabled: boolean; config: Record<string, unknown> }>} />
+          <RecoveryCenter connections={(connections ?? []).map((connection) => ({ provider: connection.provider, account_email: connection.account_email, status: connection.status, last_synced_at: connection.last_synced_at, error_message: connection.error_message }))} unresolvedSyncErrors={syncErrors ?? []} />
         </div>
       </div>
     </main>

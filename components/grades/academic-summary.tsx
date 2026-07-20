@@ -7,6 +7,7 @@ import {
 } from "../../lib/grades/calculator";
 import type { TaskView } from "../../lib/sync/types";
 import { PriorityBadge } from "../tasks/priority-visual";
+import { GradeForecast } from "./grade-forecast";
 
 type Subject = { id: string; code: string; name: string; units: number };
 type Category = GradeCategory & { subjectId: string };
@@ -138,6 +139,7 @@ export function AcademicSummary({
                             : ""}
                         </a>
                       ))}
+                    {tasks.filter((task) => task.subjectId === course.subject.id && !task.completedAt && task.weightPercent !== null).length > 0 ? <p className="mt-3 rounded-lg bg-[#fff8f3] px-2 py-1.5 text-xs font-bold text-action">Forecast: upcoming weighted work can still move this projection.</p> : null}
                   </div>
                   <p className="text-sm sm:self-center">
                     {course.percentage === null
@@ -162,6 +164,7 @@ export function AcademicSummary({
           </div>
         </div>
       </section>
+      <GradeForecast courses={courseGrades.map((course) => ({ id: course.subject.id, label: `${course.subject.code} · ${course.subject.name}`, earnedPercent: course.earnedPercent, gradedWeightPercent: course.gradedWeightPercent }))} />
     </>
   );
 }

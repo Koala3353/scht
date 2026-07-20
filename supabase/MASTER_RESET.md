@@ -33,6 +33,10 @@ If execution fails, the outer transaction rolls back rather than leaving a parti
 
 If the app reports that it cannot verify workspace access after a reset, run `supabase/migrations/0014_restore_service_role_grants.sql` once in the same project's SQL Editor. It restores the server role and the RLS-governed authenticated client privileges; the reset now includes both automatically.
 
+## Updating an existing workspace
+
+Do **not** run the master reset to receive a feature update. Apply the newest migration in the Supabase SQL Editor instead. For the connected assignment workspace, run [`0017_connected_workspace.sql`](migrations/0017_connected_workspace.sql). It adds small user-scoped tables for subtasks, focus sessions, change history, and notification rules without deleting existing tasks, courses, or connections.
+
 ## Required environment values
 
 Set environment values in `.env.local` for local work and in the hosting provider for production. Do not commit their values:

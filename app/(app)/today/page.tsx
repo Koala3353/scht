@@ -17,7 +17,7 @@ export default async function TodayPage() {
     "today profile",
   );
   const selectedTermId = profile?.current_term_id ?? null;
-  const [tasksResult, termsResult, subjectsResult, projectsResult, connectionsResult] = await Promise.all([
+  const [tasksResult, termsResult, subjectsResult, projectsResult, connectionsResult, changesResult, eventsResult] = await Promise.all([
     selectedTermId
       ? supabase
           .from("tasks")
@@ -43,6 +43,8 @@ export default async function TodayPage() {
       .eq("user_id", user.id)
       .in("provider", ["google", "canvas"])
       .eq("status", "connected"),
+    supabase.from("task_change_events").select("id, summary, created_at, change_kind").eq("user_id", user.id).order("created_at", { ascending: false }).limit(4),
+    supabase.from("calendar_events").select("id, title, starts_at").eq("user_id", user.id).order("starts_at", { ascending: false }).limit(3),
   ]);
   const tasks = requireQuery(tasksResult, "today tasks") ?? [];
   const terms = requireQuery(termsResult, "today terms") ?? [];
@@ -51,6 +53,10 @@ export default async function TodayPage() {
   const hiddenSubjectIds = new Set(allSubjects.filter((subject) => subject.archived_at).map((subject) => subject.id));
   const projects = requireQuery(projectsResult, "today projects") ?? [];
   const connections = requireQuery(connectionsResult, "today connections") ?? [];
+  // A deployment may reach the app moments before the accompanying schema
+  // migration. The briefing can stay useful without its optional change log.
+  const changes = changesResult.error ? [] : (changesResult.data ?? []);
+  const events = requireQuery(eventsResult, "today events") ?? [];
   const savedProviders: Provider[] = connections.flatMap(
     (connection) => connection.provider === "google" || connection.provider === "canvas"
       ? [connection.provider]
@@ -62,6 +68,8 @@ export default async function TodayPage() {
       hiddenSubjectIds={[...hiddenSubjectIds]}
       initialTasks={(tasks as TaskRow[]).filter((task) => !task.subject_id || !hiddenSubjectIds.has(task.subject_id)).map(toCachedTask)}
       headerAction={<ProviderResync providers={savedProviders} />}
+      changes={changes.map((change) => ({ id: change.id, summary: change.summary, createdAt: change.created_at, changeKind: change.change_kind }))}
+      events={events.map((event) => ({ id: event.id, title: event.title, startsAt: event.starts_at }))}
       projects={projects.map((project) => ({
         id: project.id,
         label: project.name,

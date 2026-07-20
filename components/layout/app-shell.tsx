@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   BookOpen,
   Bot,
@@ -13,6 +14,9 @@ import {
   Ellipsis,
   GraduationCap,
   LayoutDashboard,
+  Menu,
+  MessageSquareText,
+  X,
   Settings,
 } from "lucide-react";
 
@@ -20,18 +24,18 @@ const desktopLinks = [
   { href: "/today", label: "Today", icon: LayoutDashboard },
   { href: "/planner", label: "Tasks", icon: ClipboardList },
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
+  { href: "/inbox", label: "Inbox", icon: MessageSquareText },
   { href: "/subjects", label: "Subjects", icon: BookOpen },
   { href: "/grades", label: "Grades", icon: GraduationCap },
   { href: "/ai", label: "AI", icon: Bot },
 ];
 
-const mobileLinks = [
-  { href: "/today", label: "Today", icon: LayoutDashboard },
+const mobileMoreLinks = [
   { href: "/planner", label: "Tasks", icon: ClipboardList },
-  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/subjects", label: "Subjects", icon: BookOpen },
   { href: "/grades", label: "Grades", icon: GraduationCap },
   { href: "/ai", label: "AI", icon: Bot },
+  { href: "/inbox", label: "Inbox", icon: MessageSquareText },
   { href: "/settings", label: "More", icon: Ellipsis },
 ];
 
@@ -49,6 +53,7 @@ export function AppShell({
   hasIntegrationAttention?: boolean;
 }) {
   const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#f7faf9] text-ink lg:grid lg:grid-cols-[17.5rem_minmax(0,1fr)]">
@@ -132,8 +137,8 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="min-w-0 px-4 pb-28 pt-4 sm:px-6 sm:pb-24 lg:px-10 lg:pb-10 lg:pt-7 xl:px-12">
-        <header className="mx-auto mb-8 flex max-w-7xl flex-col gap-4 border-b border-slate-200/90 pb-5 sm:flex-row sm:items-end sm:justify-between lg:mb-10">
+      <div className="min-w-0 px-4 pb-28 sm:px-6 sm:pb-24 lg:px-10 lg:pb-10 xl:px-12">
+        <header className="mx-auto mb-7 flex min-h-[4.75rem] max-w-7xl flex-col gap-3 border-b border-slate-200/90 py-3 sm:flex-row sm:items-center sm:justify-between lg:mb-8">
           <Link
             className="flex items-center gap-2 text-2xl font-black tracking-[-0.06em] text-teal lg:hidden"
             href="/today"
@@ -147,31 +152,12 @@ export function AppShell({
         <div className="mx-auto w-full max-w-7xl">{children}</div>
       </div>
 
-      <nav
-        aria-label="Mobile navigation"
-        className="fixed inset-x-3 bottom-3 z-10 flex min-h-[4.5rem] items-center gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white/95 p-1 shadow-[0_14px_35px_rgba(20,37,51,.18)] backdrop-blur lg:hidden"
-      >
-        {mobileLinks.map(({ href, label, icon: Icon }) => {
-          const current = isCurrent(pathname, href.split("#")[0]);
-          const hasAttention = hasIntegrationAttention && href === "/settings";
-          return (
-            <Link
-              aria-current={current ? "page" : undefined}
-              className={`grid min-h-14 min-w-[3.5rem] flex-1 place-items-center rounded-xl px-1 text-center text-[11px] font-bold leading-tight transition ${
-                current
-                  ? "bg-[#e6f2f0] text-teal"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-ink"
-              }`}
-              href={href}
-              key={label}
-              prefetch
-            >
-              <span className="relative grid place-items-center"><Icon aria-hidden="true" size={19} strokeWidth={2.25} />{hasAttention ? <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 size-2.5 rounded-full bg-red-500 ring-2 ring-white" /> : null}</span>
-              <span>{label}</span>
-              {hasAttention ? <span className="sr-only">A connection needs attention</span> : null}
-            </Link>
-          );
-        })}
+      {mobileMenuOpen ? <><button aria-label="Close navigation menu" className="fixed inset-0 z-20 bg-[#073f42]/30 backdrop-blur-[1px] lg:hidden" onClick={() => setMobileMenuOpen(false)} type="button" /><nav aria-label="More navigation" className="fixed inset-x-3 bottom-24 z-30 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_50px_rgba(20,37,51,.22)] lg:hidden">{mobileMoreLinks.map(({ href, label, icon: Icon }) => { const current = isCurrent(pathname, href); return <Link aria-current={current ? "page" : undefined} className={`flex min-h-12 items-center gap-2 rounded-xl px-3 text-sm font-bold ${current ? "bg-[#e6f2f0] text-teal" : "text-slate-700 hover:bg-slate-50"}`} href={href} key={href} onClick={() => setMobileMenuOpen(false)} prefetch><Icon aria-hidden="true" className="size-4" />{label}</Link>; })}</nav></> : null}
+      <nav aria-label="Mobile navigation" className="fixed inset-x-3 bottom-3 z-30 grid min-h-[4.5rem] grid-cols-[1fr_1fr_1.15fr_1fr] items-center gap-1 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-[0_14px_35px_rgba(20,37,51,.18)] backdrop-blur lg:hidden">
+        <Link aria-current={isCurrent(pathname, "/planner") ? "page" : undefined} className={`grid min-h-14 place-items-center rounded-xl text-[11px] font-bold ${isCurrent(pathname, "/planner") ? "bg-[#e6f2f0] text-teal" : "text-slate-600"}`} href="/planner" prefetch><ClipboardList aria-hidden="true" className="size-5" /><span>Tasks</span></Link>
+        <Link aria-current={isCurrent(pathname, "/calendar") ? "page" : undefined} className={`grid min-h-14 place-items-center rounded-xl text-[11px] font-bold ${isCurrent(pathname, "/calendar") ? "bg-[#e6f2f0] text-teal" : "text-slate-600"}`} href="/calendar" prefetch><CalendarDays aria-hidden="true" className="size-5" /><span>Calendar</span></Link>
+        <Link aria-current={isCurrent(pathname, "/today") ? "page" : undefined} className="-mt-7 grid min-h-[4.8rem] place-items-center rounded-2xl bg-teal text-xs font-black text-white shadow-[0_10px_24px_rgba(7,94,96,.32)] transition hover:bg-[#064c4e]" href="/today" prefetch><LayoutDashboard aria-hidden="true" className="size-6" /><span>Today</span></Link>
+        <button aria-expanded={mobileMenuOpen} aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"} className="relative grid min-h-14 place-items-center rounded-xl text-[11px] font-bold text-ink hover:bg-slate-100" onClick={() => setMobileMenuOpen((current) => !current)} type="button">{mobileMenuOpen ? <X aria-hidden="true" className="size-5" /> : <Menu aria-hidden="true" className="size-5" />}<span>More</span>{hasIntegrationAttention ? <span aria-hidden="true" className="absolute right-3 top-3 size-2.5 rounded-full bg-red-500 ring-2 ring-white" /> : null}</button>
       </nav>
     </div>
   );

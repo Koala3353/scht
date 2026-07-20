@@ -1,0 +1,12 @@
+"use client";
+
+import type { CachedTask } from "@/lib/sync/types";
+
+function monday(date: Date) { const next = new Date(date); const day = next.getDay() || 7; next.setDate(next.getDate() - day + 1); next.setHours(17, 0, 0, 0); return next; }
+
+export function SemesterTimeline({ tasks, onMove }: { tasks: CachedTask[]; onMove: (task: CachedTask, dueAt: string) => Promise<void> }) {
+  const start = monday(new Date());
+  const weeks = Array.from({ length: 4 }, (_, index) => new Date(start.getTime() + index * 7 * 86_400_000));
+  const manualTasks = tasks.filter((task) => !task.completedAt && task.source === "manual");
+  return <section className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm font-semibold text-teal">Semester timeline</p><h2 className="mt-1 text-xl font-black tracking-tight">Spread personal work before it piles up.</h2></div><p className="text-xs font-semibold text-slate-600">Drag a personal task to a week to reschedule it.</p></div><div className="mt-5 grid gap-3 md:grid-cols-4">{weeks.map((week) => { const end = new Date(week.getTime() + 6 * 86_400_000); const taskInWeek = manualTasks.filter((task) => task.dueAt && new Date(task.dueAt) >= week && new Date(task.dueAt) <= end); return <div className="min-h-36 rounded-2xl border border-dashed border-slate-300 bg-[#f7faf9] p-3" key={week.toISOString()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const task = manualTasks.find((item) => item.id === event.dataTransfer.getData("text/plain")); if (task) void onMove(task, week.toISOString()); }}><p className="text-xs font-black uppercase tracking-wide text-teal">{week.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – {end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p><div className="mt-3 space-y-2">{taskInWeek.map((task) => <button className="w-full cursor-grab rounded-lg bg-white p-2 text-left text-xs font-bold text-ink shadow-sm active:cursor-grabbing" draggable key={task.id} onDragStart={(event) => event.dataTransfer.setData("text/plain", task.id)} type="button">{task.title}</button>)}</div></div>; })}</div>{manualTasks.length === 0 ? <p className="mt-4 text-sm leading-6 text-slate-600">Personal tasks you add in Scht will appear here so you can intentionally spread them around your deadline-heavy weeks.</p> : null}</section>;
+}
