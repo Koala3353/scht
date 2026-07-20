@@ -118,7 +118,10 @@ export default async function SubjectsPage() {
           grouped by class.
         </PageHeader>
         <div className="flex flex-wrap items-center gap-3">
-          <a className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href="/onboarding?step=curriculum">Import or update IPS</a>
+          <div className="flex flex-wrap gap-3">
+            <a className="inline-flex min-h-11 items-center justify-center rounded-xl border border-teal/30 px-3 text-sm font-bold text-teal transition hover:bg-[#e6f2f0]" href="/onboarding?step=curriculum">Import or update IPS</a>
+            <a className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 px-3 text-sm font-bold text-ink transition hover:bg-slate-50" href="/onboarding?step=curriculum#manual-subject">Add a subject manually</a>
+          </div>
           <ProviderResync providers={savedProviders} />
         </div>
       </div>

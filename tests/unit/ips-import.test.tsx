@@ -8,7 +8,7 @@ afterEach(cleanup);
 
 describe("IPS import preview", () => {
   it("keeps the selected term and parsed items reviewable before import", async () => {
-    render(<IpsImport academicYear={2026} termId="term-1" termLabel="Fall 2026" termName="First Semester" />);
+    render(<IpsImport academicYear={2026} canvasConnected={false} termId="term-1" termLabel="Fall 2026" termName="First Semester" />);
     const user = userEvent.setup();
     await user.type(screen.getByLabelText("Paste IPS"), "First Year\nFirst Semester\nP ENLIT 12 3 C Y N");
 

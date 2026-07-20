@@ -37,12 +37,25 @@ function compactCanvasText(value: string | null | undefined, fallback: string, m
   return compact.slice(0, maxLength);
 }
 
-function canvasCourseCode(course: CanvasCourse) {
-  const fallback = "CANVAS-" + course.id;
-  const code = compactCanvasText(course.course_code, fallback, 32);
-  return code.length < 32 || course.course_code?.trim().length === code.length
-    ? code
-    : (code.slice(0, 23) + "-" + course.id).slice(0, 32);
+function normalisedCourseCode(value: string) {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function courseCodesMatch(subjectCode: string, canvasCourse: CanvasCourse) {
+  const subject = normalisedCourseCode(subjectCode);
+  const canvasCode = canvasCourse.course_code?.trim().toUpperCase() ?? "";
+  const canvas = normalisedCourseCode(canvasCode);
+  if (!subject || !canvas) return false;
+  if (subject === canvas) return true;
+  // Canvas commonly adds a section suffix (for example, "MATH 10 A" or
+  // "MATH 10 SECTION A") while IPS lists the durable catalog code. Require a
+  // visible suffix boundary so MATH 10 cannot be mistaken for MATH 100.
+  const subjectPattern = subjectCode.trim().toUpperCase().split(/\s+/).map(escapeRegex).join("\\s*");
+  return new RegExp(`^${subjectPattern}(?:$|[\\s\\-–_:])`).test(canvasCode);
 }
 
 function assignmentIsFinished(assignment: CanvasAssignment) {
@@ -78,12 +91,13 @@ export async function POST(request: Request) {
         .upsert({
           user_id: user.id,
           provider: "canvas",
+          account_key: "legacy",
           status: "connected",
           encrypted_credentials: encryptCredentials({ baseUrl, token }),
           settings: { courseCount: courses.length, baseUrl },
           error_message: null,
           last_synced_at: new Date().toISOString(),
-        }, { onConflict: "user_id,provider" });
+        }, { onConflict: "user_id,provider,account_key" });
       if (error) return NextResponse.json({ error: "Could not securely save this Canvas connection." }, { status: 502 });
       return NextResponse.json({ courses: courses.length });
     } catch (error) {
@@ -115,38 +129,28 @@ export async function POST(request: Request) {
     const byCanvasCourseId = new Map(
       (existingSubjects ?? []).flatMap((subject) => subject.canvas_course_id ? [[subject.canvas_course_id, subject] as const] : []),
     );
-    const byManualCode = new Map(
-      (existingSubjects ?? [])
-        .filter((subject) => !subject.canvas_course_id)
-        .map((subject) => [subject.code.trim().toLowerCase(), subject] as const),
-    );
+    const unlinkedSubjects = (existingSubjects ?? []).filter((subject) => !subject.canvas_course_id && !subject.archived_at);
     const matchedSubjects: Array<{ id: string; canvas_course_id: string }> = [];
-    const manualMatches: Array<{ subjectId: string; canvasCourseId: string }> = [];
-    const newSubjects = courses.flatMap((course) => {
+    const subjectLinks: Array<{ subjectId: string; canvasCourseId: string }> = [];
+    let unmatchedCourses = 0;
+    for (const course of courses) {
       const canvasCourseId = String(course.id);
       const existingCanvasSubject = byCanvasCourseId.get(canvasCourseId);
       if (existingCanvasSubject) {
         // An archived Canvas course is deliberately kept for history, but it
         // must never recreate its assignments in the active workspace.
-        if (existingCanvasSubject.archived_at) return [];
+        if (existingCanvasSubject.archived_at) continue;
         matchedSubjects.push({ id: existingCanvasSubject.id, canvas_course_id: canvasCourseId });
-        return [];
+        continue;
       }
-      const code = canvasCourseCode(course);
-      const matchingManualSubject = byManualCode.get(code.toLowerCase());
-      if (matchingManualSubject) {
-        manualMatches.push({ subjectId: matchingManualSubject.id, canvasCourseId });
-        return [];
+      const matchingSubject = unlinkedSubjects.find((subject) => courseCodesMatch(subject.code, course));
+      if (matchingSubject) {
+        subjectLinks.push({ subjectId: matchingSubject.id, canvasCourseId });
+      } else {
+        unmatchedCourses += 1;
       }
-      return [{
-      user_id: user.id,
-      term_id: profile.current_term_id,
-      code,
-      name: compactCanvasText(course.name, "Canvas course " + course.id, 180),
-      canvas_course_id: canvasCourseId,
-      }];
-    });
-    const updatedManualSubjects = await Promise.all(manualMatches.map(async ({ subjectId, canvasCourseId }) => {
+    }
+    const linkedSubjects = await Promise.all(subjectLinks.map(async ({ subjectId, canvasCourseId }) => {
       const { data, error } = await supabase
         .from("subjects")
         .update({ canvas_course_id: canvasCourseId })
@@ -156,11 +160,7 @@ export async function POST(request: Request) {
       if (error) throw new Error("Could not link an existing subject to its Canvas course.");
       return data;
     }));
-    const { data: insertedSubjects, error: subjectError } = newSubjects.length
-      ? await supabase.from("subjects").insert(newSubjects).select("id, canvas_course_id")
-      : { data: [], error: null };
-    if (subjectError) throw new Error(`Could not save active Canvas courses: ${subjectError.message}`);
-    const savedSubjects = [...matchedSubjects, ...updatedManualSubjects, ...(insertedSubjects ?? [])];
+    const savedSubjects = [...matchedSubjects, ...linkedSubjects];
 
     const assignmentCounts = await mapWithConcurrency(savedSubjects ?? [], 3, async (subject) => {
       const assignments = await canvasApi<CanvasAssignment[]>(credentials.baseUrl, credentials.token, `/courses/${subject.canvas_course_id}/assignments?include[]=submission&per_page=100`);
@@ -236,7 +236,12 @@ export async function POST(request: Request) {
       .update({ status: "connected", last_synced_at: new Date().toISOString(), error_message: null })
       .eq("id", connection.id);
     if (updateError) throw new Error("Canvas data imported, but the connection result could not be saved.");
-    return NextResponse.json({ courses: savedSubjects?.length ?? 0, assignments: assignmentCounts.reduce((sum, count) => sum + count, 0) });
+    return NextResponse.json({
+      courses: savedSubjects.length,
+      linkedCourses: subjectLinks.length,
+      unmatchedCourses,
+      assignments: assignmentCounts.reduce((sum, count) => sum + count, 0),
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Canvas sync failed.";
     const needsReconnect = canvasErrorKind(error) === "needs_reconnect";

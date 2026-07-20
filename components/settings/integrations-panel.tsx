@@ -46,6 +46,8 @@ async function responseBody(response: Response) {
   return (await response.json().catch(() => ({}))) as {
     error?: string;
     courses?: number;
+    linkedCourses?: number;
+    unmatchedCourses?: number;
     assignments?: number;
     calendarEvents?: number;
     gmailTasks?: number;
@@ -97,7 +99,12 @@ export function IntegrationsPanel({ initialGoogleConnections, initialCanvasConne
       });
       const body = await responseBody(response);
       const nextNotice = response.ok
-        ? { kind: "success" as const, text: action === "connect" ? "Canvas connected. " + (body.courses ?? 0) + " active courses found." : "Canvas sync complete. " + (body.assignments ?? 0) + " assignments imported." }
+        ? {
+            kind: "success" as const,
+            text: action === "connect"
+              ? "Canvas connected. " + (body.courses ?? 0) + " active courses found. Import your IPS to choose which ones become Scht subjects."
+              : "Canvas sync complete. " + (body.assignments ?? 0) + " assignments imported. " + (body.linkedCourses ?? 0) + " IPS/manual subject" + (body.linkedCourses === 1 ? "" : "s") + " linked." + (body.unmatchedCourses ? " " + body.unmatchedCourses + " Canvas course" + (body.unmatchedCourses === 1 ? " was" : "s were") + " skipped because they are not in your IPS or manual subjects." : ""),
+          }
         : { kind: "error" as const, text: body.error ?? "Canvas request failed." };
       if (response.ok) {
         setCanvasConnection((current) => ({ status: "connected", last_synced_at: new Date().toISOString(), error_message: null, settings: action === "connect" && canvasUrl ? { baseUrl: canvasUrl } : current?.settings }));

@@ -35,7 +35,12 @@ function syncRequest() {
   });
 }
 
-function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existingSourceIds: string[] = [], assignments: Array<Record<string, unknown>> | null = null) {
+function setupSync(
+  errorAt: "subjects" | "tasks" | "connection" | null,
+  existingSourceIds: string[] = [],
+  assignments: Array<Record<string, unknown>> | null = null,
+  existingSubjects: Array<Record<string, unknown>> = [{ id: "ips-subject", code: "TEST-42", canvas_course_id: null, archived_at: null }],
+) {
   const connectionQuery = {
     eq: vi.fn(),
     maybeSingle: vi.fn(async () => ({ data: { id: "connection-1", encrypted_credentials: "dGVzdA==" }, error: null })),
@@ -69,9 +74,9 @@ function setupSync(errorAt: "subjects" | "tasks" | "connection" | null, existing
         update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: errorAt === "connection" ? { message: "database down" } : null })) })),
       };
       if (table === "subjects") return {
-        select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ data: [], error: null })) })) })),
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ data: existingSubjects, error: null })) })) })),
         insert: mocks.subjectsInsert.mockImplementation(() => subjectMutation(errorAt === "subjects")),
-        update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn(async () => ({ data: { id: "saved", canvas_course_id: "42" }, error: null })) })) })) })),
+        update: vi.fn(() => ({ eq: vi.fn(() => ({ select: vi.fn(() => ({ single: vi.fn(async () => ({ data: errorAt === "subjects" ? null : { id: "saved", canvas_course_id: "42" }, error: errorAt === "subjects" ? { message: "database down" } : null })) })) })) })),
       };
       if (table === "tasks") return tasksTable;
       if (table === "canvas_assignment_details") return {
@@ -153,12 +158,23 @@ describe("Canvas sync persistence", () => {
     expect(mocks.tasksUpsert).toHaveBeenCalledTimes(2);
   });
 
-  it("uses Canvas IDs and manual-course matching instead of an expression-index upsert", async () => {
+  it("links a matching IPS subject to Canvas instead of creating a replacement subject", async () => {
     setupSync(null);
     const response = await POST(syncRequest());
 
     expect(response.status).toBe(200);
-    expect(mocks.subjectsInsert).toHaveBeenCalledWith(expect.any(Array));
+    expect(mocks.subjectsInsert).not.toHaveBeenCalled();
+  });
+
+  it("does not create dashboard subjects from Canvas courses that are absent from the IPS", async () => {
+    setupSync(null, [], null, []);
+
+    const response = await POST(syncRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ courses: 0, assignments: 0, unmatchedCourses: 1 });
+    expect(mocks.subjectsInsert).not.toHaveBeenCalled();
   });
 
   it("does not create tasks for submitted Canvas assignments and closes prior imported copies", async () => {

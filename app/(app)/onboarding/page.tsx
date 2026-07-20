@@ -65,6 +65,7 @@ export default async function OnboardingPage({
       {params.step === "curriculum" ? (
         <IpsImport
           academicYear={currentTerm.academic_year}
+          canvasConnected={(connections ?? []).some((connection) => connection.provider === "canvas" && connection.status === "connected")}
           termId={currentTerm.id}
           termLabel={label}
           termName={currentTerm.name as AcademicTermName}
