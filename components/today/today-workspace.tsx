@@ -43,6 +43,13 @@ function syncTone(state: SyncState) {
   return "bg-[#f7ebe3] text-action";
 }
 
+function taskSyncLabel(state: SyncState) {
+  if (state === "Sync failed") return "Task changes need retry";
+  if (state === "Syncing") return "Saving task changes";
+  if (state === "Synced") return "Task changes saved";
+  return state;
+}
+
 export function TodayWorkspace({
   initialTasks,
   selectedTermId,
@@ -360,7 +367,7 @@ export function TodayWorkspace({
             className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-2 text-sm font-bold ${syncTone(syncState)}`}
           >
             <Cloud className="size-4" aria-hidden="true" />
-            {syncState}
+            {taskSyncLabel(syncState)}
           </p>
           {syncState === "Sync failed" && (
             <button
@@ -368,7 +375,7 @@ export function TodayWorkspace({
               onClick={() => void retrySynchronization()}
               type="button"
             >
-              Retry sync
+              Retry task changes
             </button>
           )}
           {syncState === "Needs review" && (

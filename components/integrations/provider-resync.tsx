@@ -180,13 +180,18 @@ export function ProviderResync({ providers }: { providers: Provider[] }) {
         {announcement || (selectedProviders.length ? "Ready to refresh saved connections." : "Not connected")}
       </div>
       {results.length > 0 ? (
-        <ul className="w-full max-w-sm space-y-1 text-left text-sm sm:text-right" aria-label="Provider refresh results">
-          {results.map((result) => (
-            <li className={"break-words " + (result.tone === "success" ? "text-teal" : "text-action")} key={result.id}>
-              {result.message}
-            </li>
-          ))}
-        </ul>
+        <div className="w-full max-w-sm text-left sm:text-right" role="status">
+          <p className={"text-xs font-bold uppercase tracking-wide " + (results.some((result) => result.tone === "warning") ? "text-action" : "text-teal")}>
+            {results.some((result) => result.tone === "warning") ? "Integration refresh completed with issues" : "Integration refresh complete"}
+          </p>
+          <ul className="mt-1 space-y-1 text-sm" aria-label="Provider refresh results">
+            {results.map((result) => (
+              <li className={"break-words " + (result.tone === "success" ? "text-teal" : "text-action")} key={result.id}>
+                {result.message}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </div>
   );
