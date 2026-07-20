@@ -71,7 +71,8 @@ export default async function SubjectsPage() {
       .from("integration_connections")
       .select("provider")
       .eq("user_id", user.id)
-      .eq("provider", "canvas"),
+      .eq("provider", "canvas")
+      .eq("status", "connected"),
   ]);
   const categories = requireQuery(categoriesResult, "subject grade categories") ?? [];
   const results = requireQuery(resultsResult, "subject assessment results") ?? [];

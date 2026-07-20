@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { decryptCredentials, encryptCredentials } from "../../../../lib/integrations/credentials";
-import { canvasApi, type CanvasAssignment, type CanvasCourse } from "../../../../lib/integrations/canvas";
+import { canvasApi, canvasErrorKind, type CanvasAssignment, type CanvasCourse } from "../../../../lib/integrations/canvas";
 import { canvasAssignmentHtmlForStorage } from "../../../../lib/integrations/canvas-assignment-content";
 import { normalizeCanvasBaseUrl, validCanvasToken } from "../../../../lib/validation/canvas-input";
 import { createClient } from "../../../../lib/supabase/server";
@@ -239,7 +239,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ courses: savedSubjects?.length ?? 0, assignments: assignmentCounts.reduce((sum, count) => sum + count, 0) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Canvas sync failed.";
-    const { error: updateError } = await supabase.from("integration_connections").update({ status: "error", error_message: message }).eq("id", connection.id);
-    return NextResponse.json({ error: updateError ? "Canvas sync failed and its connection status could not be saved." : message }, { status: 502 });
+    const needsReconnect = canvasErrorKind(error) === "needs_reconnect";
+    const { error: updateError } = await supabase.from("integration_connections").update({ status: needsReconnect ? "error" : "connected", error_message: message }).eq("id", connection.id);
+    return NextResponse.json({ error: updateError ? "Canvas sync failed and its connection status could not be saved." : message, needsReconnect }, { status: 502 });
   }
 }

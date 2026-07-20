@@ -48,7 +48,8 @@ export default async function PlannerPage({ searchParams }: { searchParams: Plan
       .from("integration_connections")
       .select("provider")
       .eq("user_id", user.id)
-      .in("provider", ["google", "canvas"]),
+      .in("provider", ["google", "canvas"])
+      .eq("status", "connected"),
   ]);
   const profile = requireQuery(profileResult, "tasks profile");
   const tasks = requireQuery(tasksResult, "tasks") ?? [];

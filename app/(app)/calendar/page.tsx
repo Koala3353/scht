@@ -34,7 +34,8 @@ export default async function CalendarPage({
       .from("integration_connections")
       .select("provider")
       .eq("user_id", user.id)
-      .eq("provider", "google"),
+      .eq("provider", "google")
+      .eq("status", "connected"),
   ]);
   const profile = requireQuery(profileResult, "calendar profile");
   const preferences = requireQuery(preferencesResult, "calendar timezone preference");

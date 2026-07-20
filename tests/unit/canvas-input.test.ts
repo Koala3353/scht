@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   createClient: vi.fn(),
   canvasApi: vi.fn(),
+  canvasErrorKind: vi.fn(() => "retryable"),
   decryptCredentials: vi.fn(),
   encryptCredentials: vi.fn(),
   subjectsInsert: vi.fn(),
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../lib/supabase/server", () => ({ createClient: mocks.createClient }));
-vi.mock("../../lib/integrations/canvas", () => ({ canvasApi: mocks.canvasApi }));
+vi.mock("../../lib/integrations/canvas", () => ({ canvasApi: mocks.canvasApi, canvasErrorKind: mocks.canvasErrorKind }));
 vi.mock("../../lib/integrations/credentials", () => ({
   decryptCredentials: mocks.decryptCredentials,
   encryptCredentials: mocks.encryptCredentials,

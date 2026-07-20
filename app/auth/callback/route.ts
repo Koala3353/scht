@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { encryptCredentials } from '@/lib/integrations/credentials';
+import { decryptCredentials, encryptCredentials } from '@/lib/integrations/credentials';
+import { mergeGoogleCredential, type GoogleCredential } from '@/lib/integrations/google';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 
 const pendingCookie = 'scht-google-integration-pending';
+
+function bytes(value: unknown) {
+  if (typeof value === 'string') return value.startsWith('\\x') ? Buffer.from(value.slice(2), 'hex') : Buffer.from(value, 'base64');
+  return Buffer.from(value as Uint8Array);
+}
+
+function settingsRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
 
 function logAdminAuthDiagnostic(
   enabled: boolean,
@@ -128,19 +138,35 @@ export async function GET(request: NextRequest) {
 
   if (isGoogleIntegration) {
     if (!session?.provider_token) return redirectTo(request, '/settings?integration=google-error', true);
-    const credentials = encryptCredentials({
+    const { data: existing, error: existingError } = await supabase
+      .from('integration_connections')
+      .select('encrypted_credentials, settings')
+      .eq('user_id', user.id)
+      .eq('provider', 'google')
+      .maybeSingle();
+    if (existingError) return redirectTo(request, '/settings?integration=google-error', true);
+    let previous: Pick<GoogleCredential, 'refreshToken'> | undefined;
+    try {
+      if (existing?.encrypted_credentials) previous = { refreshToken: decryptCredentials(bytes(existing.encrypted_credentials)).refreshToken };
+    } catch {
+      // A new OAuth refresh token below is enough to replace unreadable legacy credentials.
+    }
+    const merged = mergeGoogleCredential({
       accessToken: session.provider_token,
       ...(session.provider_refresh_token ? { refreshToken: session.provider_refresh_token } : {}),
       expiresAt: new Date(Date.now() + 3_300_000).toISOString(),
-    });
+    }, previous);
+    if (!merged.refreshToken) return redirectTo(request, '/settings?integration=google-error', true);
+    const preservedSettings = { ...settingsRecord(existing?.settings) };
+    delete preservedSettings.sync;
     const { error: saveError } = await supabase
       .from('integration_connections')
       .upsert({
         user_id: user.id,
         provider: 'google',
         status: 'connected',
-        encrypted_credentials: credentials,
-        settings: { scopes: ['calendar.readonly', 'gmail.readonly'] },
+        encrypted_credentials: encryptCredentials({ accessToken: merged.accessToken, ...(merged.refreshToken ? { refreshToken: merged.refreshToken } : {}), ...(merged.expiresAt ? { expiresAt: merged.expiresAt } : {}) }),
+        settings: { ...preservedSettings, scopes: ['calendar.readonly', 'gmail.readonly'] },
         error_message: null,
         last_synced_at: null,
       }, { onConflict: 'user_id,provider' });

@@ -11,6 +11,7 @@ import { ProviderResync } from '../../components/integrations/provider-resync';
 afterEach(() => {
   cleanup();
   refresh.mockClear();
+  window.sessionStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -40,6 +41,22 @@ describe('ProviderResync', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not auto-refresh the same provider again after navigating to another workspace page', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      calendar: { state: 'synced', imported: 0, message: '0 Calendar events imported.' },
+      gmail: { state: 'synced', imported: 0, message: '0 Gmail tasks imported.' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = render(<ProviderResync providers={['google']} />);
+    await screen.findByText('0 Calendar events imported.');
+    first.unmount();
+
+    render(<ProviderResync providers={['google']} />);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('sends the Canvas sync action independently alongside Google and remains retryable after degradation', async () => {

@@ -46,6 +46,7 @@ async function responseBody(response: Response) {
     assignments?: number;
     calendarEvents?: number;
     gmailTasks?: number;
+    needsReconnect?: boolean;
     calendar?: ServiceResult;
     gmail?: ServiceResult;
   };
@@ -97,11 +98,11 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
         setCanvasConnection((current) => ({ status: "connected", last_synced_at: new Date().toISOString(), error_message: null, settings: action === "connect" && canvasUrl ? { baseUrl: canvasUrl } : current?.settings }));
         if (action === "connect") { setCanvasToken(""); setCanvasUrl(""); }
       } else if (action === "sync") {
-        setCanvasConnection((current) => current ? { ...current, status: "error", error_message: nextNotice.text } : current);
+        setCanvasConnection((current) => current ? { ...current, status: body.needsReconnect ? "error" : "connected", error_message: nextNotice.text } : current);
       }
       updateNotice(nextNotice);
     } catch {
-      if (action === "sync") setCanvasConnection((current) => current ? { ...current, status: "error", error_message: "Canvas could not be reached. Check your connection and try again." } : current);
+      if (action === "sync") setCanvasConnection((current) => current ? { ...current, status: "connected", error_message: "Canvas could not be reached. Check your connection and try again." } : current);
       updateNotice({ kind: "error", text: "Canvas could not be reached. Check the URL and try again." });
     } finally {
       setBusy(false);
@@ -254,7 +255,7 @@ export function IntegrationsPanel({ initialGoogleConnection, initialCanvasConnec
         <article className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
           <span className="grid size-11 place-items-center rounded-xl bg-[#f7ebe3] text-action"><Cloud className="size-5" aria-hidden="true" /></span>
           <div className="mt-5 flex flex-wrap items-center gap-3"><h3 className="text-xl font-black">Canvas</h3><span className={"inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold " + canvasStatus.className}><CanvasStatusIcon className="size-3.5" aria-hidden="true" />{canvasStatus.label}</span></div>
-          <p className="mt-2 max-w-xl leading-7 text-slate-700">{canvasHost ? "Connected securely to " + canvasHost + ". " : ""}Your token is encrypted before it is stored and is never shown again. Active courses are matched to your selected term and assignments become useful tasks.</p>{canvasConnected && canvasConnection?.last_synced_at ? <p className="mt-3 text-sm font-semibold text-teal">Last checked <LocalDateTime value={canvasConnection.last_synced_at} />.</p> : null}{canvasConnection?.status === "error" && canvasConnection.error_message ? <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]">{canvasConnection.error_message}</p> : null}
+          <p className="mt-2 max-w-xl leading-7 text-slate-700">{canvasHost ? "Connected securely to " + canvasHost + ". " : ""}Your token is encrypted before it is stored and is never shown again. Active courses are matched to your selected term and assignments become useful tasks.</p>{canvasConnected && canvasConnection?.last_synced_at ? <p className="mt-3 text-sm font-semibold text-teal">Last checked <LocalDateTime value={canvasConnection.last_synced_at} />.</p> : null}{canvasConnection?.error_message ? <p className="mt-3 rounded-xl bg-[#fff0eb] px-3 py-2 text-sm font-semibold leading-6 text-[#702906]">{canvasConnection.status === "error" ? canvasConnection.error_message : `Last sync issue: ${canvasConnection.error_message}`}</p> : null}
           <form className="mt-5 grid gap-4 md:grid-cols-2" onSubmit={(event) => void canvas("connect", event)}>
             <label className="text-sm font-bold text-ink">Canvas base URL{canvasConnection ? " (enter only to replace)" : ""}<input autoCapitalize="none" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink placeholder:text-slate-600 focus:border-teal" inputMode="url" onChange={(event) => setCanvasUrl(event.target.value)} placeholder="https://canvas.example.edu" required spellCheck={false} type="url" value={canvasUrl} /></label>
             <label className="text-sm font-bold text-ink">Personal API token{canvasConnection ? " (enter only to replace)" : ""}<input autoCapitalize="none" autoComplete="off" autoCorrect="off" className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-ink focus:border-teal" maxLength={4096} onChange={(event) => setCanvasToken(event.target.value)} required spellCheck={false} type="password" value={canvasToken} /></label>

@@ -41,7 +41,8 @@ export default async function TodayPage() {
       .from("integration_connections")
       .select("provider")
       .eq("user_id", user.id)
-      .in("provider", ["google", "canvas"]),
+      .in("provider", ["google", "canvas"])
+      .eq("status", "connected"),
   ]);
   const tasks = requireQuery(tasksResult, "today tasks") ?? [];
   const terms = requireQuery(termsResult, "today terms") ?? [];

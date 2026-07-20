@@ -38,6 +38,24 @@ function refreshMessage(providers: Provider[]) {
   return `Refreshing ${providers.map(providerName).join(" and ")}…`;
 }
 
+function unrefreshedThisSession(providers: Provider[]) {
+  try {
+    return providers.filter((provider) => window.sessionStorage.getItem(`scht-provider-auto-resync-v1:${provider}`) !== "done");
+  } catch {
+    // Privacy settings can deny session storage. In that case, retain the
+    // original one-per-mount behavior rather than blocking a manual refresh.
+    return providers;
+  }
+}
+
+function markAutoRefreshed(providers: Provider[]) {
+  try {
+    providers.forEach((provider) => window.sessionStorage.setItem(`scht-provider-auto-resync-v1:${provider}`, "done"));
+  } catch {
+    // No persistence is required for a manual or one-off automatic sync.
+  }
+}
+
 function uniqueResults(results: ProviderResult[]) {
   return results.filter(
     (result, index) => results.findIndex(
@@ -140,25 +158,32 @@ export function ProviderResync({ providers }: { providers: Provider[] }) {
     (provider, index) => providers.indexOf(provider) === index,
   );
 
-  const resync = useCallback(async () => {
-    if (!selectedProviders.length || busy) return;
+  const resync = useCallback(async (requestedProviders: Provider[]) => {
+    if (!requestedProviders.length || busy) return;
     setBusy(true);
-    setAnnouncement(refreshMessage(selectedProviders));
+    setAnnouncement(refreshMessage(requestedProviders));
     const responses = await Promise.all(
-      selectedProviders.map((provider) => provider === "google" ? syncGoogle() : syncCanvas()),
+      requestedProviders.map((provider) => provider === "google" ? syncGoogle() : syncCanvas()),
     );
     const settledResults = uniqueResults(responses.flat());
     setResults(settledResults);
     setAnnouncement(refreshOutcome(settledResults));
     setBusy(false);
     router.refresh();
-  }, [busy, router, selectedProviders]);
+  }, [busy, router]);
 
   useEffect(() => {
     if (didAutoResync.current) return;
     didAutoResync.current = true;
-    void resync();
-  }, [resync]);
+    const providersToRefresh = unrefreshedThisSession(selectedProviders);
+    if (!providersToRefresh.length) return;
+    markAutoRefreshed(providersToRefresh);
+    // Defer the stateful request until after the effect commits. Do not cancel
+    // it in cleanup: React Strict Mode intentionally mounts, cleans up, and
+    // mounts effects again in development, and cancelling here would suppress
+    // the only scheduled first-session refresh.
+    void Promise.resolve().then(() => resync(providersToRefresh));
+  }, [resync, selectedProviders]);
 
   const buttonLabel = selectedProviders.length
     ? `Resync ${selectedProviders.map(providerName).join(" and ")}`
@@ -170,7 +195,7 @@ export function ProviderResync({ providers }: { providers: Provider[] }) {
         aria-describedby="provider-resync-status"
         className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-teal/30 bg-white px-4 py-2 text-sm font-bold text-teal transition hover:bg-[#e6f2f0] disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-500"
         disabled={busy || !selectedProviders.length}
-        onClick={() => void resync()}
+        onClick={() => void resync(selectedProviders)}
         type="button"
       >
         <RefreshCw aria-hidden="true" className={busy ? "size-4 animate-spin" : "size-4"} />

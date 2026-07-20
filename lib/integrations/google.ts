@@ -6,6 +6,19 @@ export interface GoogleCredential {
   expiresAt?: string;
 }
 
+/**
+ * Google only sends a refresh token on some OAuth exchanges. Reconnecting
+ * must therefore retain the one already stored for this account whenever the
+ * callback provides a new access token without another refresh token.
+ */
+export function mergeGoogleCredential(next: GoogleCredential, previous?: Pick<GoogleCredential, "refreshToken">): GoogleCredential {
+  return {
+    accessToken: next.accessToken,
+    ...(next.refreshToken || previous?.refreshToken ? { refreshToken: next.refreshToken || previous?.refreshToken } : {}),
+    ...(next.expiresAt ? { expiresAt: next.expiresAt } : {}),
+  };
+}
+
 export type GoogleErrorKind = "rate_limited" | "needs_reauth" | "permission" | "unavailable" | "unknown";
 
 export class GoogleApiError extends Error {
