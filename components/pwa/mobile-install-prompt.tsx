@@ -16,14 +16,18 @@ export function mobileInstallPromptKind(userAgent: string, isStandalone: boolean
 }
 
 export function MobileInstallPrompt() {
-  const [kind, setKind] = useState<PromptKind>(() => {
-    if (typeof window === 'undefined') return null;
+  // Browser-only data must not influence the first client render: Next has
+  // already rendered this component on the server by then.
+  const [kind, setKind] = useState<PromptKind>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPrompt | null>(null);
+
+  useEffect(() => {
     const dismissedAt = Number(window.localStorage.getItem(DISMISS_KEY) ?? 0);
     const standalone = window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
-    if (dismissedAt > Date.now() - DISMISS_FOR_MS || standalone) return null;
-    return mobileInstallPromptKind(navigator.userAgent, standalone);
-  });
-  const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPrompt | null>(null);
+    if (dismissedAt > Date.now() - DISMISS_FOR_MS || standalone) return;
+    const timeout = window.setTimeout(() => setKind(mobileInstallPromptKind(navigator.userAgent, standalone)), 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
 
   useEffect(() => {
     const standalone = window.matchMedia('(display-mode: standalone)').matches || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);

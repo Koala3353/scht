@@ -6,6 +6,7 @@ import type { TaskProject, TaskSubject, TaskTerm } from "../tasks/task-editor";
 import { calendarEntries, type CalendarEventView, type CalendarEntry } from "../../lib/calendar/entries";
 import { localDayLabel } from "../../lib/calendar/range";
 import type { CachedTask } from "../../lib/sync/types";
+import { useHasHydrated } from "../format/local-date-time";
 
 type CalendarWorkspaceProps = {
   userId: string;
@@ -34,6 +35,7 @@ export function CalendarWorkspace({
   timezone,
   range,
 }: CalendarWorkspaceProps) {
+  const hydrated = useHasHydrated();
   const { tasks, saveTask } = useTaskSyncWorkspace({
     userId,
     initialTasks,
@@ -69,7 +71,7 @@ export function CalendarWorkspace({
           ) : (
             <article className="rounded-2xl border border-slate-200 bg-white p-4" key={entry.id}>
               <time className="font-bold text-teal" dateTime={entry.at}>
-                {entry.isAllDay ? "All day" : new Intl.DateTimeFormat(undefined, { timeZone: timezone, hour: "numeric", minute: "2-digit" }).format(new Date(entry.at))}
+                {entry.isAllDay ? "All day" : hydrated ? new Intl.DateTimeFormat(undefined, { timeZone: timezone, hour: "numeric", minute: "2-digit" }).format(new Date(entry.at)) : "Scheduled"}
               </time>
               <h3 className="mt-1 font-bold">{entry.title}</h3>
               <p className="text-sm text-slate-600">

@@ -32,7 +32,49 @@ export class TaskDatabase extends Dexie {
       tasks: 'id,userId,termId,dueAt,updatedAt,completedAt,[userId+termId]',
       outbox: 'id,userId,createdAt,nextAttemptAt,[userId+nextAttemptAt]',
     });
+
+    // A short-lived build registered version 3 without every required store
+    // for some installed PWAs. Bump again so those databases receive the
+    // missing store even though their IndexedDB version already says "3".
+    this.version(4).stores({
+      tasks: 'id,userId,termId,dueAt,updatedAt,completedAt,[userId+termId]',
+      outbox: 'id,userId,createdAt,nextAttemptAt,[userId+nextAttemptAt]',
+    });
   }
 }
 
 export const taskDb = new TaskDatabase();
+
+const requiredStores = ['tasks', 'outbox'];
+let openingDatabase: Promise<void> | null = null;
+
+function hasRequiredStores() {
+  const database = taskDb.backendDB();
+  return requiredStores.every((store) => database.objectStoreNames.contains(store));
+}
+
+/**
+ * Ensure an older installed PWA has all stores before it touches the cache.
+ * If IndexedDB was left in an impossible partial schema, rebuild only the
+ * local cache; the authenticated server snapshot restores it immediately.
+ */
+export async function ensureTaskDatabase() {
+  if (openingDatabase) return openingDatabase;
+
+  openingDatabase = (async () => {
+    await taskDb.open();
+    if (hasRequiredStores()) return;
+
+    taskDb.close();
+    await taskDb.delete();
+    await taskDb.open();
+
+    if (!hasRequiredStores()) {
+      throw new Error('Scht could not prepare offline storage in this browser.');
+    }
+  })().finally(() => {
+    openingDatabase = null;
+  });
+
+  return openingDatabase;
+}

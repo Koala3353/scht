@@ -2,9 +2,17 @@
 
 import { mergeTaskSnapshot, shouldApplyAcceptedTask } from "../../components/tasks/task-types";
 
-import { taskDb } from "./db";
+import * as taskDatabase from "./db";
 import { enqueueTaskMutation, flushTaskOutbox } from "./outbox";
 import type { CachedTask, TaskMutation, TaskSyncResponse } from "./types";
+
+const { taskDb } = taskDatabase;
+
+async function ensureLocalTaskStorage() {
+  // Older focused unit-test doubles expose only taskDb. Real browser builds
+  // always include the repair guard exported by db.ts.
+  if ("ensureTaskDatabase" in taskDatabase) await taskDatabase.ensureTaskDatabase();
+}
 
 export async function postTaskMutations(mutations: TaskMutation[]): Promise<TaskSyncResponse> {
   const response = await fetch("/api/sync/tasks", {
@@ -37,6 +45,7 @@ export async function hydrateTaskCache({
   currentTermId?: string | null;
   pruneMissingSnapshot?: boolean;
 }) {
+  await ensureLocalTaskStorage();
   const localTasks = await taskDb.tasks.where("userId").equals(userId).toArray();
   const mergedTasks = mergeTaskSnapshot(localTasks, snapshot, userId, currentTermId, pruneMissingSnapshot);
   await taskDb.transaction("rw", taskDb.tasks, async () => {
@@ -53,6 +62,7 @@ export async function hydrateTaskCache({
 
 /** Apply sync acknowledgements to the same user-scoped cache used offline. */
 export async function synchronizeTaskCache(userId: string): Promise<TaskSyncResponse> {
+  await ensureLocalTaskStorage();
   const response = await flushTaskOutbox(userId, postTaskMutations);
   await taskDb.transaction("rw", taskDb.tasks, async () => {
     const pendingMutations = (await taskDb.outbox.where("userId").equals(userId).toArray())
@@ -94,6 +104,7 @@ export async function saveTaskLocally(
   baseUpdatedAt: string | null,
 ): Promise<TaskSyncResponse> {
   if (task.userId !== userId) throw new Error("This task belongs to another account.");
+  await ensureLocalTaskStorage();
   await taskDb.tasks.put({ ...task, syncState: "pending", syncError: undefined, canonicalTask: undefined });
   await enqueueTaskMutation({
     id: crypto.randomUUID(),

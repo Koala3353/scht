@@ -5,6 +5,7 @@ import { CheckCircle2, ExternalLink, Pencil, RotateCcw } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
 import { AssignmentPrompt } from "../ai/assignment-prompt";
+import { useHasHydrated } from "../format/local-date-time";
 import { TaskEditor, sourceLabel, type TaskProject, type TaskSubject, type TaskTerm } from "./task-editor";
 
 type TaskListProps = {
@@ -35,6 +36,7 @@ function relativeDue(dueAt: string | null | undefined) {
 
 export function TaskList({ tasks, currentTermId = null, terms, subjects, projects, onSave, initialEditingId = null, approvedCategoryLabelsBySubject = {} }: TaskListProps) {
   const [editing, setEditing] = useState<string | null>(initialEditingId);
+  const hydrated = useHasHydrated();
   const subjectLabels = new Map(subjects.map((subject) => [subject.id, subject.label]));
   const projectLabels = new Map(projects.map((project) => [project.id, project.label]));
 
@@ -45,7 +47,9 @@ export function TaskList({ tasks, currentTermId = null, terms, subjects, project
       {tasks.map((task) => {
         const isEditing = editing === task.id;
         const needsReview = task.syncState === "conflict" || task.syncState === "rejected";
-        const dueLabel = relativeDue(task.dueAt);
+        // Relative and locale-specific dates differ between Vercel and a
+        // student's device. Render a stable label until hydration completes.
+        const dueLabel = hydrated ? relativeDue(task.dueAt) : (task.dueAt ? "Scheduled" : "No deadline");
         return (
           <li className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" key={task.id}>
             {isEditing ? (

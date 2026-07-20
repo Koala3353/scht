@@ -3,6 +3,7 @@
 import { CheckCircle2, Clock3 } from "lucide-react";
 
 import type { CachedTask } from "@/lib/sync/types";
+import { useHasHydrated } from "../format/local-date-time";
 
 interface AgendaProps {
   tasks: CachedTask[];
@@ -41,6 +42,7 @@ function formatDueTime(dueAt: string | null | undefined) {
 }
 
 export function Agenda({ tasks, onComplete }: AgendaProps) {
+  const hydrated = useHasHydrated();
   if (tasks.length === 0) {
     return (
       <section className="rounded-[1.5rem] border border-dashed border-teal/30 bg-white px-6 py-10 text-center">
@@ -67,7 +69,7 @@ export function Agenda({ tasks, onComplete }: AgendaProps) {
               className="pt-1 text-right text-sm font-bold tabular-nums text-slate-500"
               dateTime={task.dueAt ?? undefined}
             >
-              {formatDueTime(task.dueAt)}
+              {hydrated ? formatDueTime(task.dueAt) : (task.dueAt ? "Scheduled" : "No deadline")}
             </time>
             <div className="min-w-0">
               <h3 className="font-bold text-ink">{task.title}</h3>
